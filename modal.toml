@@ -1,0 +1,11 @@
+# Modal configuration file
+# This file is optional but helps with project organization
+
+[project]
+name = "stable-audio-open"
+description = "Stable Audio Open deployment on Modal"
+
+[environment]
+# Environment variables (if needed)
+# HF_TOKEN = "your-token-here"  # Uncomment if you need HuggingFace authentication
+

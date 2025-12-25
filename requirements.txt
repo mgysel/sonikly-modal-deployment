@@ -1,0 +1,19 @@
+# Modal deployment requirements
+modal>=0.63.0
+
+# Core dependencies (these are also installed in the Modal image)
+torch==2.1.0
+torchaudio==2.1.0
+einops
+numpy<2
+scipy
+soundfile
+huggingface_hub[hf_transfer]==0.27.1
+transformers
+accelerate
+safetensors
+
+# Stable Audio Tools
+# Note: This is installed from git in the Modal image
+# git+https://github.com/Stability-AI/stable-audio-tools.git
+
