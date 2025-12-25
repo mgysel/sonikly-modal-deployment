@@ -42,7 +42,7 @@ MODEL_CACHE_DIR = "/cache"
     gpu="A10G",  # A10G is sufficient for inference, can upgrade to A100 if needed
     timeout=600,
     volumes={MODEL_CACHE_DIR: model_volume},
-    scaledown_window=300,  # Keep container alive for 5 minutes after last request
+    scaledown_window=5,  # Keep container alive for 5 seconds after last request
     secrets=[modal.Secret.from_name("huggingface")],  # Add HuggingFace authentication
 )
 class StableAudioModel:
