@@ -42,7 +42,7 @@ MODEL_CACHE_DIR = "/cache"
     gpu="A10G",  # A10G is sufficient for inference, can upgrade to A100 if needed
     timeout=600,
     volumes={MODEL_CACHE_DIR: model_volume},
-    scaledown_window=5,  # Keep container alive for 5 seconds after last request
+    scaledown_window=2,  # Keep container alive for 5 seconds after last request
     secrets=[modal.Secret.from_name("huggingface")],  # Add HuggingFace authentication
 )
 class StableAudioModel:
@@ -119,7 +119,8 @@ class StableAudioModel:
         print(f"Generating audio for prompt: '{prompt}'")
         print(f"Duration: {duration}s, Steps: {steps}, CFG Scale: {cfg_scale}")
         
-        # Generate audio
+        # Generate audio using stable-audio-tools generation function
+        # generate_diffusion_cond handles both latent generation and decoding internally
         with torch.no_grad():
             output = self.generate_fn(
                 self.model,
@@ -133,11 +134,13 @@ class StableAudioModel:
                 device=self.device
             )
         
-        # Convert to audio
-        output = output.cpu().numpy()[0]  # Get first batch item
+        # Convert to numpy and get first batch item
+        output = output.cpu().numpy()[0]
         
-        # Normalize audio
-        output = output / max(abs(output.max()), abs(output.min()))
+        # Normalize audio to prevent clipping
+        max_val = max(abs(output.max()), abs(output.min()))
+        if max_val > 0:
+            output = output / max_val
         
         # Save to bytes buffer
         buffer = io.BytesIO()
