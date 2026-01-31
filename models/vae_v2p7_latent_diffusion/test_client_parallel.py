@@ -50,7 +50,7 @@ def test_via_modal_api():
                 diffusion_steps=50,
                 num_outputs=num_outputs,
                 seed=42,
-                verbose=False,
+                verbose=True,  # Enable verbose to see what's happening
             )
             elapsed = time.time() - start
             
@@ -76,8 +76,11 @@ def test_via_modal_api():
                     print(f"     - Parallel speedup: {speedup:.1f}x faster than sequential")
             else:
                 print(f"✗ Failed: {result['message']}")
-                if 'traceback' in result:
-                    print(f"     Traceback:\n{result['traceback']}")
+                if 'traceback' in result and result['traceback']:
+                    print(f"     Traceback:")
+                    print(result['traceback'])
+                else:
+                    print(f"     Full result: {result}")
         
         print("\n" + "=" * 80)
         print("✅ Parallel API tests completed!")

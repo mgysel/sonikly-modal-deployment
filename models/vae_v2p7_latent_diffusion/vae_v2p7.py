@@ -1038,7 +1038,7 @@ class VAE_V2P7:
         """Generate synthesizer parameters from text description using latent diffusion.
         
         Args:
-            text_description: Text prompt describing the desired sound
+            text_description: Text prompt (string) or list of text prompts describing the desired sound(s)
             diffusion_steps: Number of denoising steps (default: use model's default, typically 1000)
             head_noise_level: Noise level to add to output heads (typically 0.0)
             sample_categorical: If True, sample from categorical distributions; else argmax
@@ -1046,7 +1046,8 @@ class VAE_V2P7:
             verbose: Print debug information
         
         Returns:
-            np.ndarray: Parameter array of shape (202,) or None on error
+            np.ndarray: Parameter array of shape (202,) for single prompt, or (batch_size, 202) for list of prompts
+                       Returns None on error
         """
         if seed is not None:
             np.random.seed(seed)
@@ -1064,8 +1065,24 @@ class VAE_V2P7:
         ldm_model = self._load_model()
         self._load_embedding_model()
         
+        # Determine if input is a batch or single prompt
+        is_batch = isinstance(text_description, (list, tuple))
+        if is_batch:
+            batch_size = len(text_description)
+            prompts = text_description
+        else:
+            batch_size = 1
+            prompts = [text_description]
+        
         try:
-            emb = encode_text(text_description, self.embedding_model_type)
+            # Encode all prompts at once (batch encoding is more efficient)
+            if verbose:
+                print(f"Encoding {batch_size} prompt(s) with {self.embedding_model_type}...")
+            
+            # encode_text handles both single strings and lists
+            # Returns shape: (batch_size, embedding_dim)
+            emb = encode_text(prompts, self.embedding_model_type)
+            
             if verbose:
                 print(f"Text encoded with {self.embedding_model_type}. Shape: {emb.shape}")
         except Exception as e:
@@ -1082,7 +1099,7 @@ class VAE_V2P7:
             # Run diffusion generation (1000-step denoising loop)
             if verbose:
                 steps_to_use = diffusion_steps if diffusion_steps is not None else ldm_model.timesteps
-                print(f"Running {steps_to_use}-step diffusion sampling...")
+                print(f"Running {steps_to_use}-step diffusion sampling for batch_size={batch_size}...")
             
             predicted_outputs = ldm_model.generate(emb, steps=diffusion_steps or ldm_model.timesteps)
             
@@ -1091,6 +1108,8 @@ class VAE_V2P7:
             
             if verbose:
                 print(f"Decoder outputs: {len(predicted_outputs)} heads")
+                for i, head in enumerate(predicted_outputs):
+                    print(f"  Head {i}: shape {np.array(head).shape}")
             
         except Exception as e:
             print(f"Error running diffusion model: {e}")
@@ -1099,21 +1118,45 @@ class VAE_V2P7:
             return None
         
         try:
-            params = reconstruct_parameters_from_heads(
-                predicted_outputs, FLAT_PARAMETER_TYPES, CATEGORICAL_NUM_CLASSES,
-                sample_categorical=sample_categorical, noise_level=head_noise_level
-            )
+            # Process each sample in the batch
+            all_params = []
+            for batch_idx in range(batch_size):
+                # Extract outputs for this batch item
+                batch_outputs = []
+                for head in predicted_outputs:
+                    head_array = np.array(head)
+                    if head_array.ndim >= 2:
+                        # Extract batch item: head[batch_idx]
+                        batch_outputs.append(head_array[batch_idx])
+                    else:
+                        # Single sample case
+                        batch_outputs.append(head_array)
+                
+                params = reconstruct_parameters_from_heads(
+                    batch_outputs, FLAT_PARAMETER_TYPES, CATEGORICAL_NUM_CLASSES,
+                    sample_categorical=sample_categorical, noise_level=head_noise_level
+                )
+                
+                # Apply automatic mod matrix scaling for overlapping destinations
+                params = scale_overlapping_mod_amounts(params)
+                all_params.append(params)
             
-            # Apply automatic mod matrix scaling for overlapping destinations
-            params = scale_overlapping_mod_amounts(params)
             if verbose:
                 print("Applied mod matrix overlap scaling")
             
-            if verbose:
-                print(f"Reconstructed shape: {params.shape}")
-                print(f"Sample values (first 10): {params[:10]}")
+            # Return single array for single prompt, batch array for multiple prompts
+            result = np.array(all_params)
+            if not is_batch:
+                result = result[0]
             
-            return params
+            if verbose:
+                print(f"Reconstructed shape: {result.shape}")
+                if result.ndim == 1:
+                    print(f"Sample values (first 10): {result[:10]}")
+                else:
+                    print(f"Sample values (first sample, first 10): {result[0, :10]}")
+            
+            return result
         except Exception as e:
             print(f"Error reconstructing parameters: {e}")
             import traceback
