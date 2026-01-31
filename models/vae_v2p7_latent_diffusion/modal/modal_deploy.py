@@ -102,56 +102,37 @@ class VAEv2p7Inference:
     
     @modal.enter(snap=True)
     def load_model(self):
-        """Load model on container startup (v2 - fixed device placement)"""
+        """
+        Snapshot Phase: Load everything to CPU RAM.
+        CRITICAL: Do not touch the GPU here. No warmups!
+        The GPU will be initialized on the first inference request.
+        """
         import os
         import tensorflow as tf
         
+        # Setup environment (no GPU commands yet)
         os.environ["KERAS_BACKEND"] = "tensorflow"
         os.environ.pop("TF_USE_LEGACY_KERAS", None)
-        
-        # Disable XLA globally to avoid libdevice issues, but keep @tf.function optimization
         os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
-        tf.config.optimizer.set_jit(False)
-        
-        # Configure TensorFlow GPU
-        print("Checking GPU availability...")
-        gpus = tf.config.list_physical_devices('GPU')
-        if gpus:
-            print(f"✓ Found {len(gpus)} GPU(s): {gpus}")
-            # Enable memory growth to avoid OOM errors
-            for gpu in gpus:
-                tf.config.experimental.set_memory_growth(gpu, True)
-            print("✓ GPU memory growth enabled")
-            print("✓ XLA JIT disabled (using @tf.function graph optimization instead)")
-        else:
-            print("⚠️  WARNING: No GPU detected! Running on CPU.")
         
         # Add model directory to Python path
         sys.path.insert(0, "/root")
         
         from vae_v2p7 import VAE_V2P7
         
-        print(f"Loading model from {MODEL_PATH}")
-        self.model = VAE_V2P7(
-            model_path=MODEL_PATH,
-            embedding_model_type="clap",
-            default_diffusion_steps=1000,
-        )
-        self.model._load_model()
-        self.model._load_embedding_model()
-        print("Model loaded successfully!")
-        
-        # Warmup inference to trigger JIT compilation during startup
-        print("🔥 Running warmup inference for snapshot...")
-        try:
-            _ = self.model.generate(
-                text_description="warmup",
-                diffusion_steps=10,  # Small warmup - compiled state will be snapshotted
-                verbose=False
+        # Load model to CPU ONLY - force TensorFlow to ignore GPU during snapshot
+        print("💾 Loading model to CPU for snapshot...")
+        with tf.device("/cpu:0"):
+            self.model = VAE_V2P7(
+                model_path=MODEL_PATH,
+                embedding_model_type="clap",
+                default_diffusion_steps=50,  # Set default to 50
             )
-            print("✓ Warmup complete - State is ready to snapshot!")
-        except Exception as e:
-            print(f"⚠️  Warmup inference failed (non-critical): {e}")
+            self.model._load_model()
+            self.model._load_embedding_model()
+        
+        print("✅ Model loaded to RAM. Snapshot ready.")
+        # DO NOT RUN WARMUP HERE - it breaks the snapshot by initializing GPU state
     
     @modal.method()
     def generate(
@@ -161,7 +142,12 @@ class VAEv2p7Inference:
         seed: int = None,
         verbose: bool = False,
     ) -> dict:
-        """Generate synthesizer parameters from text description"""
+        """
+        Generate synthesizer parameters from text description.
+        
+        Note: The first request will take ~3-4s longer as TensorFlow initializes
+        the GPU and JIT-compiles the model. Subsequent requests are fast (~200ms).
+        """
         try:
             params = self.model.generate(
                 text_description=description,
