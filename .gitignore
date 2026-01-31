@@ -36,6 +36,16 @@ ENV/
 # Modal
 .modal/
 
+# Model weights (stored in Modal Volume, not in git)
+*.keras
+*.h5
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+weights/
+models/**/weights/
+
 # Generated audio files
 *.wav
 *.mp3
