@@ -14,8 +14,7 @@ import os
 
 APP_NAME = "vae-v2p7-inference"
 VOLUME_NAME = "vae-v2p7-models"
-VOLUME_PATH = "/models/ldm_final.keras"  # Path on the Network Volume
-MODEL_PATH = VOLUME_PATH  # Use volume path directly
+MODEL_PATH = "/root/ldm_final.keras"  # Use baked weights from image, not volume
 GPU_TYPE = "L4"  # NVIDIA L4 - faster than T4, more VRAM for batching 
 
 # ============================================================================
@@ -25,8 +24,11 @@ GPU_TYPE = "L4"  # NVIDIA L4 - faster than T4, more VRAM for batching
 app = modal.App(APP_NAME)
 volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
+# Path to local weights file (must exist on your machine)
+local_weights_path = Path(__file__).parent.parent / "weights" / "ldm_final.keras"
+
 # ============================================================================
-# Image Definition
+# Image Definition - Bake Weights + Set Global Env Vars
 # ============================================================================
 
 def download_models():
@@ -38,9 +40,16 @@ def download_models():
     model_name = "laion/clap-htsat-fused"
     ClapProcessor.from_pretrained(model_name)
     ClapModel.from_pretrained(model_name)
+    print("✓ CLAP model cached in image!")
 
 image = (
     modal.Image.from_registry("nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04", add_python="3.11")
+    # STRICTER ENV VARS TO KILL XLA
+    .env({
+        "TF_XLA_FLAGS": "--tf_xla_auto_jit=0 --tf_xla_cpu_global_jit",  # Added cpu_global_jit disable
+        "TF_CPP_MIN_LOG_LEVEL": "3",
+        "KERAS_BACKEND": "tensorflow"
+    })
     .pip_install(
         "tensorflow==2.17.1",
         "keras==3.12.0",
@@ -52,6 +61,11 @@ image = (
         "fastapi[standard]",
     )
     .run_function(download_models)
+    # 👇 BAKE WEIGHTS: Copy model weights into the image (no network volume needed!)
+    .add_local_file(
+        local_path=local_weights_path,
+        remote_path="/root/ldm_final.keras"
+    )
     .add_local_file(
         local_path=Path(__file__).parent.parent / "vae_v2p7.py",
         remote_path="/root/vae_v2p7.py"
@@ -69,46 +83,44 @@ image = (
 @app.cls(
     image=image,
     gpu=GPU_TYPE,
-    timeout=300,
-    scaledown_window=2,  # Keep at 2s for testing cold starts (change to 120+ for production)
-    volumes={"/models": volume},
+    timeout=600,
+    scaledown_window=2,  # Keep at 2s for testing cold starts
     enable_memory_snapshot=True,
-    # NOTE: GPU snapshots removed - TensorFlow is sensitive to GPU state during snapshot.
-    # Using CPU-only loading for reliable ~2-3s cold starts.
+    # No volumes needed - weights are baked into the image!
 )
 class VAEv2p7Inference:
     
     @modal.enter(snap=True)
     def load_model(self):
         """
-        Snapshot Phase: Load everything to CPU RAM only.
-        CRITICAL: Do not touch the GPU here to ensure snapshot reliability.
+        Snapshot Phase: Load from baked weights (fast!)
+        No warmup to avoid triggering XLA compilation.
         """
         import os
         import tensorflow as tf
         
-        # 1. Environment Setup
-        os.environ["KERAS_BACKEND"] = "tensorflow"
-        os.environ.pop("TF_USE_LEGACY_KERAS", None)
-        os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"
+        # Double-tap XLA disable (belt and suspenders)
+        tf.config.optimizer.set_jit(False)
         
-        # 2. Add model directory to Python path
+        # Add model directory to Python path
         sys.path.insert(0, "/root")
         from vae_v2p7 import VAE_V2P7
         
-        # 3. Load Model to CPU ONLY (crucial for snapshot reliability)
-        print("💾 Loading model to CPU RAM for snapshot...")
+        print(f"💾 Loading model from baked weights: {MODEL_PATH}")
         with tf.device("/cpu:0"):
             self.model = VAE_V2P7(
-                model_path=MODEL_PATH,
+                model_path=MODEL_PATH,  # /root/ldm_final.keras - baked in image!
                 embedding_model_type="clap",
                 default_diffusion_steps=50,
             )
             self.model._load_model()
             self.model._load_embedding_model()
+            
+            # NO WARMUP - it triggers XLA compilation for CPU, which gets thrown away
+            # when the model runs on GPU, causing 40s delay on first request.
+            # Accept the "unbuilt state" warnings - they're harmless.
         
         print("✅ Snapshot Ready. GPU will initialize on first request.")
-        # NO WARMUP HERE - GPU must remain untouched for reliable snapshots
     
     @modal.method()
     def generate(self, description: str, diffusion_steps: int = 50, num_outputs: int = 1, seed: int = None, verbose: bool = False):
