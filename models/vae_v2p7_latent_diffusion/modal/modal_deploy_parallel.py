@@ -127,6 +127,13 @@ class VAEv2p7Inference:
             
             # 2. Run Parallel Inference
             # Pass the LIST directly - the model processes all prompts simultaneously on GPU
+            
+            # Fix for deterministic behavior due to memory snapshotting:
+            if seed is None:
+                import time
+                # Use current time to ensure entropy
+                seed = int(time.time() * 1000000) % (2**32)
+                
             params = self.model.generate(
                 text_description=prompts,  # Pass the LIST, not the string
                 diffusion_steps=diffusion_steps,

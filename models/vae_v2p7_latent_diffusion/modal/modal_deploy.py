@@ -159,6 +159,14 @@ class VAEv2p7Inference:
                 }
             else:
                 # Single output
+                # Fix for deterministic behavior due to memory snapshotting:
+                # If seed is None, we MUST generate a random one, otherwise the RNG state
+                # restored from the snapshot will be identical every time.
+                if seed is None:
+                    import time
+                    # Use current time to ensure entropy
+                    seed = int(time.time() * 1000000) % (2**32)
+                
                 params = self.model.generate(
                     text_description=description,
                     diffusion_steps=diffusion_steps,
