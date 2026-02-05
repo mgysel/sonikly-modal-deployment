@@ -142,7 +142,7 @@ class VAEv2p7Inference:
             )
             
             if params is None:
-                return {"success": False, "message": "Generation failed", "parameters": None}
+                return {"success": False, "message": "Generation failed", "automatable_parameters": None}
             
             # 3. Return Results
             # Handle both single output (202,) and batch outputs (N, 202)
@@ -157,7 +157,7 @@ class VAEv2p7Inference:
             return {
                 "success": True,
                 "message": "Success",
-                "parameters": params_array.tolist(),  # Returns list of N arrays
+                "automatable_parameters": params_array.tolist(),  # Returns list of N arrays
                 "shape": params_array.shape,
                 "count": params_array.shape[0],  # Number of outputs (first dimension)
             }

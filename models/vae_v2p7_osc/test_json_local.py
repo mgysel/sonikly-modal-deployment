@@ -74,19 +74,19 @@ def test_json_reconstruction():
     assert "osc_b" in audio_vecs
     assert "noise" in audio_vecs
     
-    # 4. JSON Conversion
-    json_out = numpy_to_json(rec_params, SERUM_PARAMETERS)
+    # 4. JSON Conversion (Mocking the deployment logic, not numpy_to_json)
+    # The deployment now returns flat arrays, so we just check the reconstructed array directly
+    # and the structure we intend to build in the deployment script.
     
-    keys = list(json_out.keys())
-    print(f"  - JSON keys count: {len(keys)}")
-    print(f"  - Sample Key '0': {json_out.get('0')}")
+    print(f"  - Reconstructed params: {rec_params.tolist()[:5]}...")
+    assert isinstance(rec_params.tolist(), list)
+    assert len(rec_params.tolist()) == 205
     
-    assert '0' in json_out
-    assert 'id' in json_out['0']
-    assert 'value' in json_out['0']
-    assert json_out['0']['name'] == "MasterVol"
+    # We no longer use numpy_to_json for the main output
+    # but we can check if audio_vecs matches expectations
+    print(f"  - Audio Match Keys: {list(audio_vecs.keys())}")
     
-    print("✅ JSON Logic Verified!")
+    print("✅ Logic Verified (Top-level aggregation happens in modal_deploy_parallel.py)")
 
 if __name__ == "__main__":
     try:

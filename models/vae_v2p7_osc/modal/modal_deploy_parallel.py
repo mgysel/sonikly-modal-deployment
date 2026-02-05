@@ -190,7 +190,8 @@ class VAEv2p7OscInference:
             )
             
             # 3. Process Batch
-            results = []
+            all_auto_params = []
+            all_non_auto_params = []
             
             # Convert all heads to numpy first
             numpy_heads = [t.numpy() for t in raw_outputs]
@@ -211,34 +212,22 @@ class VAEv2p7OscInference:
                 match_b = self.find_nearest_matches(audio_vecs["osc_b"], self.wt_embeds, self.wt_names)
                 match_n = self.find_nearest_matches(audio_vecs["noise"], self.noise_embeds, self.noise_names)
                 
-                # Convert to Notebook-Style JSON
-                json_params = self.numpy_to_json(rec_params, self.SERUM_PARAMETERS)
+                # 1. Automatable Parameters (Flat Array)
+                all_auto_params.append(rec_params.tolist())
                 
-                results.append({
-                    "automatable_parameters": json_params,
-                    "non_automatable_parameters": {
-                        "osc_a": [m['name'] for m in match_a], # Just strings as requested? User said "list of the 3 strings"
-                        "osc_b": [m['name'] for m in match_b],
-                        "osc_n": [m['name'] for m in match_n],
-                        # Keeping full match objects potentially useful but user asked for "list of the 3 strings"
-                        # Actually user said "osc_a, osc_b, and osc_n list of the 3 strings"
-                        # But typically frontend likes objects. The notebook prints "Name (Score)". 
-                        # I will return the objects in a cleaner key if needed, or just the strings.
-                        # Let's stick to the list of strings for the "non_automatable_parameters" keys as requested.
-                        # BUT I will also add a "matches_details" key just in case.
-                    },
-                    "matches_details": {
-                        "osc_a": match_a,
-                        "osc_b": match_b,
-                        "osc_n": match_n
-                    }
+                # 2. Non-Automatable Parameters (Wavetable Paths)
+                all_non_auto_params.append({
+                    "osc_a": [m['name'] for m in match_a],
+                    "osc_b": [m['name'] for m in match_b],
+                    "osc_n": [m['name'] for m in match_n]
                 })
 
             return {
                 "success": True,
                 "message": "Success",
                 "count": num_outputs,
-                "results": results 
+                "automatable_parameters": all_auto_params,     # List[List[float]]
+                "non_automatable_parameters": all_non_auto_params # List[Dict[str, List[str]]]
             }
 
         except Exception as e:
@@ -297,16 +286,20 @@ def test():
     
     if result["success"]:
         print(f"✅ Generated {result['count']} outputs in {elapsed:.2f}s")
-        for i, res in enumerate(result['results']):
+        
+        auto_params_list = result['automatable_parameters']
+        non_auto_list = result['non_automatable_parameters']
+        
+        for i in range(len(auto_params_list)):
             print(f"\nOutput {i+1}:")
-            # automatable params
-            params = res['automatable_parameters']
-            # print first 2 params as check
-            p0 = params.get('0', {})
-            print(f"  Param 0 ({p0.get('name')}): {p0.get('value'):.4f}")
+            
+            # automatable params (Flat list check)
+            params = auto_params_list[i]
+            print(f"  Params Length: {len(params)}")
+            print(f"  Param 0: {params[0]:.4f}")
             
             # non-automatable
-            non_auto = res['non_automatable_parameters']
+            non_auto = non_auto_list[i]
             print(f"  Osc A: {non_auto['osc_a']}")
             print(f"  Osc B: {non_auto['osc_b']}")
             print(f"  Noise: {non_auto['osc_n']}")
