@@ -327,1318 +327,226 @@ osc_embeddings_flat = osc_embeddings.reshape(osc_embeddings.shape[0], -1)
 print(f"Osc Flat Input:     {osc_embeddings_flat.shape}")
 
 # Cell 2.2
-# SERUM_PARAMETERS with the nested structure required for Activity Gating
+# SERUM_PARAMETERS - MANUALLY CLEANED AND RE-INDEXED (0-201)
 
 SERUM_PARAMETERS = {
     "global": [
-        {
-            "id": "0",
-            "serum_id": "0",
-            "name": "MasterVol",
-            "type": "continuous"
-        },
-        {
-            "id": "1",
-            "serum_id": "65",
-            "name": "PortTime",
-            "type": "continuous"
-        },
-        {
-            "id": "2",
-            "serum_id": "66",
-            "name": "PortCurve",
-            "type": "continuous"
-        }
+        {"id": "0", "serum_id": "0", "name": "MasterVol", "type": "continuous"},
+        {"id": "1", "serum_id": "65", "name": "PortTime", "type": "continuous"},
+        {"id": "2", "serum_id": "66", "name": "PortCurve", "type": "continuous"}
     ],
     "osc_a": [
-        {
-            "id": "3",
-            "serum_id": "212",
-            "name": "Osc A On",
-            "type": "boolean"
-        },
-        {
-            "name": "Osc A Wavetable",
-            "type": "categorical",
-            "num_categories": 145,
-            "serum_id": None,
-            "id": "4"
-        },
-        {
-            "id": "5",
-            "serum_id": "1",
-            "name": "A Vol",
-            "type": "continuous"
-        },
-        {
-            "id": "6",
-            "serum_id": "2",
-            "name": "A Pan",
-            "type": "continuous"
-        },
-        {
-            "id": "7",
-            "serum_id": "3",
-            "name": "A Octave",
-            "type": "categorical",
-            "num_categories": 9
-        },
-        {
-            "id": "8",
-            "serum_id": "4",
-            "name": "A Semi",
-            "type": "categorical",
-            "num_categories": 25
-        },
-        {
-            "id": "9",
-            "serum_id": "5",
-            "name": "A Fine",
-            "type": "continuous"
-        },
-        {
-            "id": "10",
-            "serum_id": "10",
-            "name": "A CoarsePit",
-            "type": "continuous"
-        },
-        {
-            "id": "11",
-            "serum_id": "6",
-            "name": "A Unison",
-            "type": "continuous"
-        },
-        {
-            "id": "12",
-            "serum_id": "7",
-            "name": "A UniDet",
-            "type": "continuous"
-        },
-        {
-            "id": "13",
-            "serum_id": "8",
-            "name": "A UniBlend",
-            "type": "continuous"
-        },
-        {
-            "id": "14",
-            "serum_id": "172",
-            "name": "A Uni LR",
-            "type": "continuous"
-        },
-        {
-            "id": "15",
-            "serum_id": "174",
-            "name": "A Uni Warp",
-            "type": "continuous"
-        },
-        {
-            "id": "16",
-            "serum_id": "176",
-            "name": "A Uni WTPos",
-            "type": "continuous"
-        },
-        {
-            "id": "17",
-            "serum_id": "178",
-            "name": "A Uni Stack",
-            "type": "categorical",
-            "num_categories": 9
-        },
-        {
-            "id": "18",
-            "serum_id": "11",
-            "name": "A WTPos",
-            "type": "continuous"
-        },
-        {
-            "id": "19",
-            "serum_id": "168",
-            "name": "WarpOscA",
-            "type": "categorical",
-            "num_categories": 23
-        },
-        {
-            "id": "20",
-            "serum_id": "9",
-            "name": "A Warp",
-            "type": "continuous"
-        },
-        {
-            "id": "21",
-            "serum_id": "12",
-            "name": "A RandPhase",
-            "type": "continuous"
-        },
-        {
-            "id": "22",
-            "serum_id": "13",
-            "name": "A Phase",
-            "type": "continuous"
-        }
+        {"id": "3", "serum_id": "212", "name": "Osc A On", "type": "boolean"},
+        {"id": "4", "serum_id": "1", "name": "A Vol", "type": "continuous"},
+        {"id": "5", "serum_id": "2", "name": "A Pan", "type": "continuous"},
+        {"id": "6", "serum_id": "3", "name": "A Octave", "type": "categorical", "num_categories": 9},
+        {"id": "7", "serum_id": "4", "name": "A Semi", "type": "categorical", "num_categories": 25},
+        {"id": "8", "serum_id": "5", "name": "A Fine", "type": "continuous"},
+        {"id": "9", "serum_id": "10", "name": "A CoarsePit", "type": "continuous"},
+        {"id": "10", "serum_id": "6", "name": "A Unison", "type": "continuous"},
+        {"id": "11", "serum_id": "7", "name": "A UniDet", "type": "continuous"},
+        {"id": "12", "serum_id": "8", "name": "A UniBlend", "type": "continuous"},
+        {"id": "13", "serum_id": "172", "name": "A Uni LR", "type": "continuous"},
+        {"id": "14", "serum_id": "174", "name": "A Uni Warp", "type": "continuous"},
+        {"id": "15", "serum_id": "176", "name": "A Uni WTPos", "type": "continuous"},
+        {"id": "16", "serum_id": "178", "name": "A Uni Stack", "type": "categorical", "num_categories": 9},
+        {"id": "17", "serum_id": "11", "name": "A WTPos", "type": "continuous"},
+        {"id": "18", "serum_id": "168", "name": "WarpOscA", "type": "categorical", "num_categories": 23},
+        {"id": "19", "serum_id": "9", "name": "A Warp", "type": "continuous"},
+        {"id": "20", "serum_id": "12", "name": "A RandPhase", "type": "continuous"},
+        {"id": "21", "serum_id": "13", "name": "A Phase", "type": "continuous"}
     ],
     "osc_b": [
-        {
-            "id": "23",
-            "serum_id": "213",
-            "name": "Osc B On",
-            "type": "boolean"
-        },
-        {
-            "name": "Osc B Wavetable",
-            "type": "categorical",
-            "num_categories": 145,
-            "serum_id": None,
-            "id": "24"
-        },
-        {
-            "id": "25",
-            "serum_id": "14",
-            "name": "B Vol",
-            "type": "continuous"
-        },
-        {
-            "id": "26",
-            "serum_id": "15",
-            "name": "B Pan",
-            "type": "continuous"
-        },
-        {
-            "id": "27",
-            "serum_id": "16",
-            "name": "B Octave",
-            "type": "categorical",
-            "num_categories": 9
-        },
-        {
-            "id": "28",
-            "serum_id": "17",
-            "name": "B Semi",
-            "type": "categorical",
-            "num_categories": 25
-        },
-        {
-            "id": "29",
-            "serum_id": "18",
-            "name": "B Fine",
-            "type": "continuous"
-        },
-        {
-            "id": "30",
-            "serum_id": "23",
-            "name": "B CoarsePit",
-            "type": "continuous"
-        },
-        {
-            "id": "31",
-            "serum_id": "19",
-            "name": "B Unison",
-            "type": "continuous"
-        },
-        {
-            "id": "32",
-            "serum_id": "20",
-            "name": "B UniDet",
-            "type": "continuous"
-        },
-        {
-            "id": "33",
-            "serum_id": "21",
-            "name": "B UniBlend",
-            "type": "continuous"
-        },
-        {
-            "id": "34",
-            "serum_id": "173",
-            "name": "B Uni LR",
-            "type": "continuous"
-        },
-        {
-            "id": "35",
-            "serum_id": "175",
-            "name": "B Uni Warp",
-            "type": "continuous"
-        },
-        {
-            "id": "36",
-            "serum_id": "177",
-            "name": "B Uni WTPos",
-            "type": "continuous"
-        },
-        {
-            "id": "37",
-            "serum_id": "179",
-            "name": "B Uni Stack",
-            "type": "categorical",
-            "num_categories": 9
-        },
-        {
-            "id": "38",
-            "serum_id": "24",
-            "name": "B WTPos",
-            "type": "continuous"
-        },
-        {
-            "id": "39",
-            "serum_id": "169",
-            "name": "WarpOscB",
-            "type": "categorical",
-            "num_categories": 23
-        },
-        {
-            "id": "40",
-            "serum_id": "22",
-            "name": "B Warp",
-            "type": "continuous"
-        },
-        {
-            "id": "41",
-            "serum_id": "25",
-            "name": "B RandPhase",
-            "type": "continuous"
-        },
-        {
-            "id": "42",
-            "serum_id": "26",
-            "name": "B Phase",
-            "type": "continuous"
-        }
+        {"id": "22", "serum_id": "213", "name": "Osc B On", "type": "boolean"},
+        {"id": "23", "serum_id": "14", "name": "B Vol", "type": "continuous"},
+        {"id": "24", "serum_id": "15", "name": "B Pan", "type": "continuous"},
+        {"id": "25", "serum_id": "16", "name": "B Octave", "type": "categorical", "num_categories": 9},
+        {"id": "26", "serum_id": "17", "name": "B Semi", "type": "categorical", "num_categories": 25},
+        {"id": "27", "serum_id": "18", "name": "B Fine", "type": "continuous"},
+        {"id": "28", "serum_id": "23", "name": "B CoarsePit", "type": "continuous"},
+        {"id": "29", "serum_id": "19", "name": "B Unison", "type": "continuous"},
+        {"id": "30", "serum_id": "20", "name": "B UniDet", "type": "continuous"},
+        {"id": "31", "serum_id": "21", "name": "B UniBlend", "type": "continuous"},
+        {"id": "32", "serum_id": "173", "name": "B Uni LR", "type": "continuous"},
+        {"id": "33", "serum_id": "175", "name": "B Uni Warp", "type": "continuous"},
+        {"id": "34", "serum_id": "177", "name": "B Uni WTPos", "type": "continuous"},
+        {"id": "35", "serum_id": "179", "name": "B Uni Stack", "type": "categorical", "num_categories": 9},
+        {"id": "36", "serum_id": "24", "name": "B WTPos", "type": "continuous"},
+        {"id": "37", "serum_id": "169", "name": "WarpOscB", "type": "categorical", "num_categories": 23},
+        {"id": "38", "serum_id": "22", "name": "B Warp", "type": "continuous"},
+        {"id": "39", "serum_id": "25", "name": "B RandPhase", "type": "continuous"},
+        {"id": "40", "serum_id": "26", "name": "B Phase", "type": "continuous"}
     ],
     "noise_osc": [
-        {
-            "id": "43",
-            "serum_id": "214",
-            "name": "Osc N On",
-            "type": "boolean"
-        },
-        {
-            "name": "Noise Oscillator",
-            "type": "categorical",
-            "num_categories": 188,
-            "serum_id": None,
-            "id": "44"
-        },
-        {
-            "id": "45",
-            "serum_id": "27",
-            "name": "Noise Level",
-            "type": "continuous"
-        },
-        {
-            "id": "46",
-            "serum_id": "28",
-            "name": "Noise Pitch",
-            "type": "continuous"
-        },
-        {
-            "id": "47",
-            "serum_id": "29",
-            "name": "Noise Fine",
-            "type": "continuous"
-        },
-        {
-            "id": "48",
-            "serum_id": "30",
-            "name": "Noise Pan",
-            "type": "continuous"
-        },
-        {
-            "id": "49",
-            "serum_id": "31",
-            "name": "Noise RandPhase",
-            "type": "continuous"
-        },
-        {
-            "id": "50",
-            "serum_id": "32",
-            "name": "Noise Phase",
-            "type": "continuous"
-        }
+        {"id": "41", "serum_id": "214", "name": "Osc N On", "type": "boolean"},
+        {"id": "42", "serum_id": "27", "name": "Noise Level", "type": "continuous"},
+        {"id": "43", "serum_id": "28", "name": "Noise Pitch", "type": "continuous"},
+        {"id": "44", "serum_id": "29", "name": "Noise Fine", "type": "continuous"},
+        {"id": "45", "serum_id": "30", "name": "Noise Pan", "type": "continuous"},
+        {"id": "46", "serum_id": "31", "name": "Noise RandPhase", "type": "continuous"},
+        {"id": "47", "serum_id": "32", "name": "Noise Phase", "type": "continuous"}
     ],
     "sub_osc": [
-        {
-            "id": "51",
-            "serum_id": "215",
-            "name": "Osc S On",
-            "type": "boolean"
-        },
-        {
-            "id": "52",
-            "serum_id": "33",
-            "name": "Sub Osc Level",
-            "type": "continuous"
-        },
-        {
-            "id": "53",
-            "serum_id": "34",
-            "name": "Sub Osc Pan",
-            "type": "continuous"
-        },
-        {
-            "id": "54",
-            "serum_id": "170",
-            "name": "SubOscShape",
-            "type": "categorical",
-            "num_categories": 6
-        },
-        {
-            "id": "55",
-            "serum_id": "171",
-            "name": "SubOscOctave",
-            "type": "continuous"
-        }
+        {"id": "48", "serum_id": "215", "name": "Osc S On", "type": "boolean"},
+        {"id": "49", "serum_id": "33", "name": "Sub Osc Level", "type": "continuous"},
+        {"id": "50", "serum_id": "34", "name": "Sub Osc Pan", "type": "continuous"},
+        {"id": "51", "serum_id": "170", "name": "SubOscShape", "type": "categorical", "num_categories": 6},
+        {"id": "52", "serum_id": "171", "name": "SubOscOctave", "type": "continuous"}
     ],
     "filter": [
-        {
-            "id": "56",
-            "serum_id": "216",
-            "name": "Filter On",
-            "type": "boolean"
-        },
-        {
-            "id": "57",
-            "serum_id": "44",
-            "name": "Fil Type",
-            "type": "categorical",
-            "num_categories": 95
-        },
-        {
-            "id": "58",
-            "serum_id": "40",
-            "name": "OscA>Fil",
-            "type": "boolean"
-        },
-        {
-            "id": "59",
-            "serum_id": "41",
-            "name": "OscB>Fil",
-            "type": "boolean"
-        },
-        {
-            "id": "60",
-            "serum_id": "42",
-            "name": "OscN>Fil",
-            "type": "boolean"
-        },
-        {
-            "id": "61",
-            "serum_id": "43",
-            "name": "OscS>Fil",
-            "type": "boolean"
-        },
-        {
-            "id": "62",
-            "serum_id": "45",
-            "name": "Fil Cutoff",
-            "type": "continuous"
-        },
-        {
-            "id": "63",
-            "serum_id": "46",
-            "name": "Fil Reso",
-            "type": "continuous"
-        },
-        {
-            "id": "64",
-            "serum_id": "47",
-            "name": "Fil Driv",
-            "type": "continuous"
-        },
-        {
-            "id": "65",
-            "serum_id": "48",
-            "name": "Fil Var",
-            "type": "continuous"
-        },
-        {
-            "id": "66",
-            "serum_id": "49",
-            "name": "Fil Mix",
-            "type": "continuous"
-        },
-        {
-            "id": "67",
-            "serum_id": "50",
-            "name": "Fil Stereo",
-            "type": "continuous"
-        }
+        {"id": "53", "serum_id": "216", "name": "Filter On", "type": "boolean"},
+        {"id": "54", "serum_id": "44", "name": "Fil Type", "type": "categorical", "num_categories": 95},
+        {"id": "55", "serum_id": "40", "name": "OscA>Fil", "type": "boolean"},
+        {"id": "56", "serum_id": "41", "name": "OscB>Fil", "type": "boolean"},
+        {"id": "57", "serum_id": "42", "name": "OscN>Fil", "type": "boolean"},
+        {"id": "58", "serum_id": "43", "name": "OscS>Fil", "type": "boolean"},
+        {"id": "59", "serum_id": "45", "name": "Fil Cutoff", "type": "continuous"},
+        {"id": "60", "serum_id": "46", "name": "Fil Reso", "type": "continuous"},
+        {"id": "61", "serum_id": "47", "name": "Fil Driv", "type": "continuous"},
+        {"id": "62", "serum_id": "48", "name": "Fil Var", "type": "continuous"},
+        {"id": "63", "serum_id": "49", "name": "Fil Mix", "type": "continuous"},
+        {"id": "64", "serum_id": "50", "name": "Fil Stereo", "type": "continuous"}
     ],
     "envelopes": [
-        {
-            "id": "68",
-            "serum_id": "35",
-            "name": "Env1 Atk",
-            "type": "continuous"
-        },
-        {
-            "id": "69",
-            "serum_id": "36",
-            "name": "Env1 Hold",
-            "type": "continuous"
-        },
-        {
-            "id": "70",
-            "serum_id": "37",
-            "name": "Env1 Dec",
-            "type": "continuous"
-        },
-        {
-            "id": "71",
-            "serum_id": "38",
-            "name": "Env1 Sus",
-            "type": "continuous"
-        },
-        {
-            "id": "72",
-            "serum_id": "39",
-            "name": "Env1 Rel",
-            "type": "continuous"
-        },
-        {
-            "id": "73",
-            "serum_id": "51",
-            "name": "Env2 Atk",
-            "type": "continuous"
-        },
-        {
-            "id": "74",
-            "serum_id": "52",
-            "name": "Env2 Hold",
-            "type": "continuous"
-        },
-        {
-            "id": "75",
-            "serum_id": "53",
-            "name": "Env2 Dec",
-            "type": "continuous"
-        },
-        {
-            "id": "76",
-            "serum_id": "54",
-            "name": "Env2 Sus",
-            "type": "continuous"
-        },
-        {
-            "id": "77",
-            "serum_id": "55",
-            "name": "Env2 Rel",
-            "type": "continuous"
-        }
+        {"id": "65", "serum_id": "35", "name": "Env1 Atk", "type": "continuous"},
+        {"id": "66", "serum_id": "36", "name": "Env1 Hold", "type": "continuous"},
+        {"id": "67", "serum_id": "37", "name": "Env1 Dec", "type": "continuous"},
+        {"id": "68", "serum_id": "38", "name": "Env1 Sus", "type": "continuous"},
+        {"id": "69", "serum_id": "39", "name": "Env1 Rel", "type": "continuous"},
+        {"id": "70", "serum_id": "51", "name": "Env2 Atk", "type": "continuous"},
+        {"id": "71", "serum_id": "52", "name": "Env2 Hold", "type": "continuous"},
+        {"id": "72", "serum_id": "53", "name": "Env2 Dec", "type": "continuous"},
+        {"id": "73", "serum_id": "54", "name": "Env2 Sus", "type": "continuous"},
+        {"id": "74", "serum_id": "55", "name": "Env2 Rel", "type": "continuous"}
     ],
     "lfos": [
-        {
-            "id": "78",
-            "serum_id": "61",
-            "name": "LFO1 Rate",
-            "type": "categorical",
-            "num_categories": 19
-        },
-        {
-            "id": "79",
-            "serum_id": "273",
-            "name": "LFO1 Rise",
-            "type": "categorical",
-            "num_categories": 20
-        },
-        {
-            "id": "80",
-            "serum_id": "281",
-            "name": "LFO1 Delay",
-            "type": "categorical",
-            "num_categories": 20
-        },
-        {
-            "id": "81",
-            "serum_id": "223",
-            "name": "LFO1 Smooth",
-            "type": "continuous"
-        },
-        {
-            "id": "82",
-            "serum_id": "62",
-            "name": "LFO2 Rate",
-            "type": "categorical",
-            "num_categories": 19
-        },
-        {
-            "id": "83",
-            "serum_id": "274",
-            "name": "LFO2 Rise",
-            "type": "categorical",
-            "num_categories": 20
-        },
-        {
-            "id": "84",
-            "serum_id": "282",
-            "name": "LFO2 Delay",
-            "type": "categorical",
-            "num_categories": 20
-        },
-        {
-            "id": "85",
-            "serum_id": "224",
-            "name": "LFO2 Smooth",
-            "type": "continuous"
-        }
+        {"id": "75", "serum_id": "61", "name": "LFO1 Rate", "type": "categorical", "num_categories": 19},
+        {"id": "76", "serum_id": "273", "name": "LFO1 Rise", "type": "categorical", "num_categories": 20},
+        {"id": "77", "serum_id": "281", "name": "LFO1 Delay", "type": "categorical", "num_categories": 20},
+        {"id": "78", "serum_id": "223", "name": "LFO1 Smooth", "type": "continuous"},
+        {"id": "79", "serum_id": "62", "name": "LFO2 Rate", "type": "categorical", "num_categories": 19},
+        {"id": "80", "serum_id": "274", "name": "LFO2 Rise", "type": "categorical", "num_categories": 20},
+        {"id": "81", "serum_id": "282", "name": "LFO2 Delay", "type": "categorical", "num_categories": 20},
+        {"id": "82", "serum_id": "224", "name": "LFO2 Smooth", "type": "continuous"}
     ],
     "fx_hyper_dimension": [
-        {
-            "id": "86",
-            "serum_id": "163",
-            "name": "Hyp Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "87",
-            "serum_id": "148",
-            "name": "Hyp_Rate",
-            "type": "continuous"
-        },
-        {
-            "id": "88",
-            "serum_id": "149",
-            "name": "Hyp_Detune",
-            "type": "continuous"
-        },
-        {
-            "id": "89",
-            "serum_id": "150",
-            "name": "Hyp_Unison",
-            "type": "continuous"
-        },
-        {
-            "id": "90",
-            "serum_id": "147",
-            "name": "Hyp_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "91",
-            "serum_id": "152",
-            "name": "HypDim_Size",
-            "type": "continuous"
-        },
-        {
-            "id": "92",
-            "serum_id": "153",
-            "name": "HypDim_Mix",
-            "type": "continuous"
-        }
+        {"id": "83", "serum_id": "163", "name": "Hyp Enable", "type": "boolean"},
+        {"id": "84", "serum_id": "148", "name": "Hyp_Rate", "type": "continuous"},
+        {"id": "85", "serum_id": "149", "name": "Hyp_Detune", "type": "continuous"},
+        {"id": "86", "serum_id": "150", "name": "Hyp_Unison", "type": "continuous"},
+        {"id": "87", "serum_id": "147", "name": "Hyp_Wet", "type": "continuous"},
+        {"id": "88", "serum_id": "152", "name": "HypDim_Size", "type": "continuous"},
+        {"id": "89", "serum_id": "153", "name": "HypDim_Mix", "type": "continuous"}
     ],
     "fx_distortion": [
-        {
-            "id": "93",
-            "serum_id": "154",
-            "name": "Dist Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "94",
-            "serum_id": "96",
-            "name": "Dist_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "95",
-            "serum_id": "97",
-            "name": "Dist_Drv",
-            "type": "continuous"
-        },
-        {
-            "id": "96",
-            "serum_id": "99",
-            "name": "Dist_Mode",
-            "type": "categorical",
-            "num_categories": 16
-        },
-        {
-            "id": "97",
-            "serum_id": "102",
-            "name": "Dist_PrePost",
-            "type": "categorical",
-            "num_categories": 3
-        },
-        {
-            "id": "98",
-            "serum_id": "98",
-            "name": "Dist_L/B/H",
-            "type": "categorical",
-            "num_categories": 3
-        },
-        {
-            "id": "99",
-            "serum_id": "100",
-            "name": "Dist_Freq",
-            "type": "continuous"
-        },
-        {
-            "id": "100",
-            "serum_id": "101",
-            "name": "Dist_BW",
-            "type": "continuous"
-        }
+        {"id": "90", "serum_id": "154", "name": "Dist Enable", "type": "boolean"},
+        {"id": "91", "serum_id": "96", "name": "Dist_Wet", "type": "continuous"},
+        {"id": "92", "serum_id": "97", "name": "Dist_Drv", "type": "continuous"},
+        {"id": "93", "serum_id": "99", "name": "Dist_Mode", "type": "categorical", "num_categories": 16},
+        {"id": "94", "serum_id": "102", "name": "Dist_PrePost", "type": "categorical", "num_categories": 3},
+        {"id": "95", "serum_id": "98", "name": "Dist_L/B/H", "type": "categorical", "num_categories": 3},
+        {"id": "96", "serum_id": "100", "name": "Dist_Freq", "type": "continuous"},
+        {"id": "97", "serum_id": "101", "name": "Dist_BW", "type": "continuous"}
     ],
     "fx_flanger": [
-        {
-            "id": "101",
-            "serum_id": "155",
-            "name": "Flg Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "102",
-            "serum_id": "103",
-            "name": "Flg_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "103",
-            "serum_id": "104",
-            "name": "Flg_BPM_Sync",
-            "type": "boolean"
-        },
-        {
-            "id": "104",
-            "serum_id": "105",
-            "name": "Flg_Rate",
-            "type": "continuous"
-        },
-        {
-            "id": "105",
-            "serum_id": "106",
-            "name": "Flg_Dep",
-            "type": "continuous"
-        },
-        {
-            "id": "106",
-            "serum_id": "107",
-            "name": "Flg_Feed",
-            "type": "continuous"
-        },
-        {
-            "id": "107",
-            "serum_id": "108",
-            "name": "Flg_Stereo",
-            "type": "continuous"
-        }
+        {"id": "98", "serum_id": "155", "name": "Flg Enable", "type": "boolean"},
+        {"id": "99", "serum_id": "103", "name": "Flg_Wet", "type": "continuous"},
+        {"id": "100", "serum_id": "104", "name": "Flg_BPM_Sync", "type": "boolean"},
+        {"id": "101", "serum_id": "105", "name": "Flg_Rate", "type": "continuous"},
+        {"id": "102", "serum_id": "106", "name": "Flg_Dep", "type": "continuous"},
+        {"id": "103", "serum_id": "107", "name": "Flg_Feed", "type": "continuous"},
+        {"id": "104", "serum_id": "108", "name": "Flg_Stereo", "type": "continuous"}
     ],
     "fx_phaser": [
-        {
-            "id": "108",
-            "serum_id": "156",
-            "name": "Phs Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "109",
-            "serum_id": "109",
-            "name": "Phs_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "110",
-            "serum_id": "110",
-            "name": "Phs_BPM_Sync",
-            "type": "boolean"
-        },
-        {
-            "id": "111",
-            "serum_id": "111",
-            "name": "Phs_Rate",
-            "type": "continuous"
-        },
-        {
-            "id": "112",
-            "serum_id": "112",
-            "name": "Phs_Dpth",
-            "type": "continuous"
-        },
-        {
-            "id": "113",
-            "serum_id": "113",
-            "name": "Phs_Frq",
-            "type": "continuous"
-        },
-        {
-            "id": "114",
-            "serum_id": "114",
-            "name": "Phs_Feed",
-            "type": "continuous"
-        },
-        {
-            "id": "115",
-            "serum_id": "115",
-            "name": "Phs_Stereo",
-            "type": "continuous"
-        }
+        {"id": "105", "serum_id": "156", "name": "Phs Enable", "type": "boolean"},
+        {"id": "106", "serum_id": "109", "name": "Phs_Wet", "type": "continuous"},
+        {"id": "107", "serum_id": "110", "name": "Phs_BPM_Sync", "type": "boolean"},
+        {"id": "108", "serum_id": "111", "name": "Phs_Rate", "type": "continuous"},
+        {"id": "109", "serum_id": "112", "name": "Phs_Dpth", "type": "continuous"},
+        {"id": "110", "serum_id": "113", "name": "Phs_Frq", "type": "continuous"},
+        {"id": "111", "serum_id": "114", "name": "Phs_Feed", "type": "continuous"},
+        {"id": "112", "serum_id": "115", "name": "Phs_Stereo", "type": "continuous"}
     ],
     "fx_chorus": [
-        {
-            "id": "116",
-            "serum_id": "157",
-            "name": "Cho Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "117",
-            "serum_id": "116",
-            "name": "Cho_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "118",
-            "serum_id": "117",
-            "name": "Cho_BPM_Sync",
-            "type": "boolean"
-        },
-        {
-            "id": "119",
-            "serum_id": "118",
-            "name": "Cho_Rate",
-            "type": "continuous"
-        },
-        {
-            "id": "120",
-            "serum_id": "119",
-            "name": "Cho_Dly",
-            "type": "continuous"
-        },
-        {
-            "id": "121",
-            "serum_id": "120",
-            "name": "Cho_Dly2",
-            "type": "continuous"
-        },
-        {
-            "id": "122",
-            "serum_id": "121",
-            "name": "Cho_Dep",
-            "type": "continuous"
-        },
-        {
-            "id": "123",
-            "serum_id": "122",
-            "name": "Cho_Feed",
-            "type": "continuous"
-        },
-        {
-            "id": "124",
-            "serum_id": "123",
-            "name": "Cho_Filt",
-            "type": "continuous"
-        }
+        {"id": "113", "serum_id": "157", "name": "Cho Enable", "type": "boolean"},
+        {"id": "114", "serum_id": "116", "name": "Cho_Wet", "type": "continuous"},
+        {"id": "115", "serum_id": "117", "name": "Cho_BPM_Sync", "type": "boolean"},
+        {"id": "116", "serum_id": "118", "name": "Cho_Rate", "type": "continuous"},
+        {"id": "117", "serum_id": "119", "name": "Cho_Dly", "type": "continuous"},
+        {"id": "118", "serum_id": "120", "name": "Cho_Dly2", "type": "continuous"},
+        {"id": "119", "serum_id": "121", "name": "Cho_Dep", "type": "continuous"},
+        {"id": "120", "serum_id": "122", "name": "Cho_Feed", "type": "continuous"},
+        {"id": "121", "serum_id": "123", "name": "Cho_Filt", "type": "continuous"}
     ],
     "fx_delay": [
-        {
-            "id": "125",
-            "serum_id": "158",
-            "name": "Dly Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "126",
-            "serum_id": "124",
-            "name": "Dly_Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "127",
-            "serum_id": "125",
-            "name": "Dly_Freq",
-            "type": "continuous"
-        },
-        {
-            "id": "128",
-            "serum_id": "126",
-            "name": "Dly_BW",
-            "type": "continuous"
-        },
-        {
-            "id": "129",
-            "serum_id": "127",
-            "name": "Dly_BPM_Sync",
-            "type": "boolean"
-        },
-        {
-            "id": "130",
-            "serum_id": "128",
-            "name": "Dly_Link",
-            "type": "boolean"
-        },
-        {
-            "id": "131",
-            "serum_id": "129",
-            "name": "Dly_TimL",
-            "type": "categorical",
-            "num_categories": 12
-        },
-        {
-            "id": "132",
-            "serum_id": "130",
-            "name": "Dly_TimR",
-            "type": "categorical",
-            "num_categories": 12
-        },
-        {
-            "id": "133",
-            "serum_id": "131",
-            "name": "Dly_Mode",
-            "type": "categorical",
-            "num_categories": 3
-        },
-        {
-            "id": "134",
-            "serum_id": "132",
-            "name": "Dly_Feed",
-            "type": "continuous"
-        },
-        {
-            "id": "135",
-            "serum_id": "133",
-            "name": "Dly_Off L",
-            "type": "continuous"
-        },
-        {
-            "id": "136",
-            "serum_id": "134",
-            "name": "Dly_Off R",
-            "type": "continuous"
-        }
+        {"id": "122", "serum_id": "158", "name": "Dly Enable", "type": "boolean"},
+        {"id": "123", "serum_id": "124", "name": "Dly_Wet", "type": "continuous"},
+        {"id": "124", "serum_id": "125", "name": "Dly_Freq", "type": "continuous"},
+        {"id": "125", "serum_id": "126", "name": "Dly_BW", "type": "continuous"},
+        {"id": "126", "serum_id": "127", "name": "Dly_BPM_Sync", "type": "boolean"},
+        {"id": "127", "serum_id": "128", "name": "Dly_Link", "type": "boolean"},
+        {"id": "128", "serum_id": "129", "name": "Dly_TimL", "type": "categorical", "num_categories": 12},
+        {"id": "129", "serum_id": "130", "name": "Dly_TimR", "type": "categorical", "num_categories": 12},
+        {"id": "130", "serum_id": "131", "name": "Dly_Mode", "type": "categorical", "num_categories": 3},
+        {"id": "131", "serum_id": "132", "name": "Dly_Feed", "type": "continuous"},
+        {"id": "132", "serum_id": "133", "name": "Dly_Off L", "type": "continuous"},
+        {"id": "133", "serum_id": "134", "name": "Dly_Off R", "type": "continuous"}
     ],
     "fx_compressor": [
-        {
-            "id": "137",
-            "serum_id": "159",
-            "name": "Comp Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "138",
-            "serum_id": "135",
-            "name": "Cmp_Thr",
-            "type": "continuous"
-        },
-        {
-            "id": "139",
-            "serum_id": "136",
-            "name": "Cmp_Rat",
-            "type": "categorical",
-            "num_categories": 21
-        },
-        {
-            "id": "140",
-            "serum_id": "137",
-            "name": "Cmp_Att",
-            "type": "continuous"
-        },
-        {
-            "id": "141",
-            "serum_id": "138",
-            "name": "Cmp_Rel",
-            "type": "continuous"
-        },
-        {
-            "id": "142",
-            "serum_id": "139",
-            "name": "CmpGain",
-            "type": "continuous"
-        },
-        {
-            "id": "143",
-            "serum_id": "140",
-            "name": "CmpMBnd",
-            "type": "categorical",
-            "num_categories": 2
-        },
-        {
-            "id": "144",
-            "serum_id": "270",
-            "name": "CompMB L",
-            "type": "continuous"
-        },
-        {
-            "id": "145",
-            "serum_id": "271",
-            "name": "CompMB M",
-            "type": "continuous"
-        },
-        {
-            "id": "146",
-            "serum_id": "272",
-            "name": "CompMB H",
-            "type": "continuous"
-        },
-        {
-            "id": "147",
-            "serum_id": "269",
-            "name": "Comp_Wet",
-            "type": "continuous"
-        }
+        {"id": "134", "serum_id": "159", "name": "Comp Enable", "type": "boolean"},
+        {"id": "135", "serum_id": "135", "name": "Cmp_Thr", "type": "continuous"},
+        {"id": "136", "serum_id": "136", "name": "Cmp_Rat", "type": "categorical", "num_categories": 21},
+        {"id": "137", "serum_id": "137", "name": "Cmp_Att", "type": "continuous"},
+        {"id": "138", "serum_id": "138", "name": "Cmp_Rel", "type": "continuous"},
+        {"id": "139", "serum_id": "139", "name": "CmpGain", "type": "continuous"},
+        {"id": "140", "serum_id": "140", "name": "CmpMBnd", "type": "categorical", "num_categories": 2},
+        {"id": "141", "serum_id": "270", "name": "CompMB L", "type": "continuous"},
+        {"id": "142", "serum_id": "271", "name": "CompMB M", "type": "continuous"},
+        {"id": "143", "serum_id": "272", "name": "CompMB H", "type": "continuous"},
+        {"id": "144", "serum_id": "269", "name": "Comp_Wet", "type": "continuous"}
     ],
     "fx_reverb": [
-        {
-            "id": "148",
-            "serum_id": "160",
-            "name": "Rev Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "149",
-            "serum_id": "81",
-            "name": "Verb Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "150",
-            "serum_id": "82",
-            "name": "VerbSize",
-            "type": "continuous"
-        },
-        {
-            "id": "151",
-            "serum_id": "83",
-            "name": "Decay",
-            "type": "continuous"
-        },
-        {
-            "id": "152",
-            "serum_id": "84",
-            "name": "VerbLoCt",
-            "type": "continuous"
-        },
-        {
-            "id": "153",
-            "serum_id": "85",
-            "name": "Spin Rate",
-            "type": "continuous"
-        },
-        {
-            "id": "154",
-            "serum_id": "86",
-            "name": "VerbHiCt",
-            "type": "continuous"
-        },
-        {
-            "id": "155",
-            "serum_id": "87",
-            "name": "Spin Depth",
-            "type": "continuous"
-        }
+        {"id": "145", "serum_id": "160", "name": "Rev Enable", "type": "boolean"},
+        {"id": "146", "serum_id": "81", "name": "Verb Wet", "type": "continuous"},
+        {"id": "147", "serum_id": "82", "name": "VerbSize", "type": "continuous"},
+        {"id": "148", "serum_id": "83", "name": "Decay", "type": "continuous"},
+        {"id": "149", "serum_id": "84", "name": "VerbLoCt", "type": "continuous"},
+        {"id": "150", "serum_id": "85", "name": "Spin Rate", "type": "continuous"},
+        {"id": "151", "serum_id": "86", "name": "VerbHiCt", "type": "continuous"},
+        {"id": "152", "serum_id": "87", "name": "Spin Depth", "type": "continuous"}
     ],
     "fx_eq": [
-        {
-            "id": "156",
-            "serum_id": "161",
-            "name": "EQ Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "157",
-            "serum_id": "88",
-            "name": "EQ FrqL",
-            "type": "continuous"
-        },
-        {
-            "id": "158",
-            "serum_id": "89",
-            "name": "EQ FrqH",
-            "type": "continuous"
-        },
-        {
-            "id": "159",
-            "serum_id": "90",
-            "name": "EQ Q L",
-            "type": "continuous"
-        },
-        {
-            "id": "160",
-            "serum_id": "91",
-            "name": "EQ Q H",
-            "type": "continuous"
-        },
-        {
-            "id": "161",
-            "serum_id": "92",
-            "name": "EQ Vol L",
-            "type": "continuous"
-        },
-        {
-            "id": "162",
-            "serum_id": "93",
-            "name": "EQ Vol H",
-            "type": "continuous"
-        },
-        {
-            "id": "163",
-            "serum_id": "94",
-            "name": "EQ TypL",
-            "type": "categorical",
-            "num_categories": 3
-        },
-        {
-            "id": "164",
-            "serum_id": "95",
-            "name": "EQ TypH",
-            "type": "categorical",
-            "num_categories": 3
-        }
+        {"id": "153", "serum_id": "161", "name": "EQ Enable", "type": "boolean"},
+        {"id": "154", "serum_id": "88", "name": "EQ FrqL", "type": "continuous"},
+        {"id": "155", "serum_id": "89", "name": "EQ FrqH", "type": "continuous"},
+        {"id": "156", "serum_id": "90", "name": "EQ Q L", "type": "continuous"},
+        {"id": "157", "serum_id": "91", "name": "EQ Q H", "type": "continuous"},
+        {"id": "158", "serum_id": "92", "name": "EQ Vol L", "type": "continuous"},
+        {"id": "159", "serum_id": "93", "name": "EQ Vol H", "type": "continuous"},
+        {"id": "160", "serum_id": "94", "name": "EQ TypL", "type": "categorical", "num_categories": 3},
+        {"id": "161", "serum_id": "95", "name": "EQ TypH", "type": "categorical", "num_categories": 3}
     ],
     "fx_filter": [
-        {
-            "id": "165",
-            "serum_id": "162",
-            "name": "FX Fil Enable",
-            "type": "boolean"
-        },
-        {
-            "id": "166",
-            "serum_id": "141",
-            "name": "FX Fil Wet",
-            "type": "continuous"
-        },
-        {
-            "id": "167",
-            "serum_id": "142",
-            "name": "FX Fil Type",
-            "type": "categorical",
-            "num_categories": 89
-        },
-        {
-            "id": "168",
-            "serum_id": "143",
-            "name": "FX Fil Freq",
-            "type": "continuous"
-        },
-        {
-            "id": "169",
-            "serum_id": "144",
-            "name": "FX Fil Reso",
-            "type": "continuous"
-        },
-        {
-            "id": "170",
-            "serum_id": "145",
-            "name": "FX Fil Drive",
-            "type": "continuous"
-        },
-        {
-            "id": "171",
-            "serum_id": "146",
-            "name": "FX Fil Var",
-            "type": "continuous"
-        },
-        {
-            "id": "172",
-            "serum_id": "268",
-            "name": "FX Fil Pan",
-            "type": "continuous"
-        }
+        {"id": "162", "serum_id": "162", "name": "FX Fil Enable", "type": "boolean"},
+        {"id": "163", "serum_id": "141", "name": "FX Fil Wet", "type": "continuous"},
+        {"id": "164", "serum_id": "142", "name": "FX Fil Type", "type": "categorical", "num_categories": 89},
+        {"id": "165", "serum_id": "143", "name": "FX Fil Freq", "type": "continuous"},
+        {"id": "166", "serum_id": "144", "name": "FX Fil Reso", "type": "continuous"},
+        {"id": "167", "serum_id": "145", "name": "FX Fil Drive", "type": "continuous"},
+        {"id": "168", "serum_id": "146", "name": "FX Fil Var", "type": "continuous"},
+        {"id": "169", "serum_id": "268", "name": "FX Fil Pan", "type": "continuous"}
     ],
     "mod_matrix": [
-        {
-            "id": "173",
-            "serum_id": "180",
-            "name": "Mod 1 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "174",
-            "serum_id": "182",
-            "name": "Mod 2 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "175",
-            "serum_id": "184",
-            "name": "Mod 3 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "176",
-            "serum_id": "186",
-            "name": "Mod 4 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "177",
-            "serum_id": "188",
-            "name": "Mod 5 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "178",
-            "serum_id": "190",
-            "name": "Mod 6 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "179",
-            "serum_id": "192",
-            "name": "Mod 7 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "180",
-            "serum_id": "194",
-            "name": "Mod 8 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "181",
-            "serum_id": "196",
-            "name": "Mod 9 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "182",
-            "serum_id": "198",
-            "name": "Mod10 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "183",
-            "serum_id": "200",
-            "name": "Mod11 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "184",
-            "serum_id": "202",
-            "name": "Mod12 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "185",
-            "serum_id": "204",
-            "name": "Mod13 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "186",
-            "serum_id": "206",
-            "name": "Mod14 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "187",
-            "serum_id": "208",
-            "name": "Mod15 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "188",
-            "serum_id": "210",
-            "name": "Mod16 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "189",
-            "serum_id": "228",
-            "name": "Mod17 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "190",
-            "serum_id": "230",
-            "name": "Mod18 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "191",
-            "serum_id": "232",
-            "name": "Mod19 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "192",
-            "serum_id": "234",
-            "name": "Mod20 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "193",
-            "serum_id": "236",
-            "name": "Mod21 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "194",
-            "serum_id": "238",
-            "name": "Mod22 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "195",
-            "serum_id": "240",
-            "name": "Mod23 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "196",
-            "serum_id": "242",
-            "name": "Mod24 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "197",
-            "serum_id": "244",
-            "name": "Mod25 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "198",
-            "serum_id": "246",
-            "name": "Mod26 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "199",
-            "serum_id": "248",
-            "name": "Mod27 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "200",
-            "serum_id": "250",
-            "name": "Mod28 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "201",
-            "serum_id": "252",
-            "name": "Mod29 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "202",
-            "serum_id": "254",
-            "name": "Mod30 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "203",
-            "serum_id": "256",
-            "name": "Mod31 amt",
-            "type": "continuous"
-        },
-        {
-            "id": "204",
-            "serum_id": "258",
-            "name": "Mod32 amt",
-            "type": "continuous"
-        }
+        {"id": str(i), "serum_id": str(180 + (i-170)*2), "name": f"Mod {i-169} amt", "type": "continuous"}
+        for i in range(170, 202)
     ]
 }
-
 
 # --- Index Lists for Type ---
 continuous_param_indices = []
 boolean_param_indices = []
 categorical_param_indices = []
 categorical_num_classes = {}
-
-# Calculate total parameters
-num_params = sum(len(group) for group in SERUM_PARAMETERS.values())
 
 # Iterate over each group to populate indices
 for group_name, params in SERUM_PARAMETERS.items():
@@ -1687,9 +595,8 @@ print("\nGroup Masking Map (Enable ID: [Dependent IDs]):")
 print(GROUP_MASKING_MAP)
 
 # --- Split Continuous Indices into Unipolar (0-1) and Bipolar (-1 to 1) ---
-# UPDATED: Mod Matrix parameters are now IDs 173 to 204.
-# Range is exclusive at the end, so we use 205.
-mod_matrix_ids = set(range(173, 205))
+# Mod Matrix is IDs 170 to 201 (inclusive), range stops at 202
+mod_matrix_ids = set(range(170, 202))
 
 unipolar_indices = [i for i in continuous_param_indices if i not in mod_matrix_ids]
 bipolar_indices = [i for i in continuous_param_indices if i in mod_matrix_ids]
@@ -1699,7 +606,7 @@ unipolar_indices.sort()
 bipolar_indices.sort()
 
 print(f"Unipolar params: {len(unipolar_indices)}")
-print(f"Bipolar params: {len(bipolar_indices)}")
+print(f"Bipolar params: {len(bipolar_indices)} (Should be 32)")
 
 """# Training
 
@@ -1766,7 +673,7 @@ W_CONT      = 10.0   # Weight for continuous knobs
 W_BOOL      = 5.0    # Weight for switches
 W_CAT       = 15.0   # Weight for menus
 W_MOD_GATE  = 5.0    # Weight for modulation slots
-W_AUDIO     = 2.0    # Weight for CLAP embedding reconstruction
+W_AUDIO     = 0.5    # REDUCED from 2.0 to avoid overwhelming the latent space
 
 # ==============================================================================
 # 1. SHARED LAYERS
@@ -1818,7 +725,7 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = tf.keras.metrics.Mean(name="reconstruction_loss")
         self.kl_loss_tracker = tf.keras.metrics.Mean(name="kl_loss")
-        self.audio_loss_tracker = tf.keras.metrics.Mean(name="audio_loss") # New Tracker
+        self.audio_loss_tracker = tf.keras.metrics.Mean(name="audio_loss")
 
     def call(self, inputs, training=False):
         # inputs expected: [text, params, audio]
@@ -1883,9 +790,6 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
             head_idx += 1
 
         # --- 2. AUDIO EMBEDDING RECONSTRUCTION ---
-        # The last 3 heads in y_pred_list are [OscA, OscB, Noise]
-        # y_true_audio is (Batch, 1536). y_true_mask is (Batch, 3).
-
         # Reshape Audio Ground Truth to (Batch, 3, 512)
         true_audio_3d = tf.reshape(y_true_audio, [-1, 3, 512])
 
@@ -1920,25 +824,16 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         return total_loss, recon_loss, kl_loss, audio_loss
 
     def train_step(self, data):
-        # Unpack the list we passed in .fit()
-        # x is [text, params, audio, mask]
         inputs = data[0]
         text, params, audio, mask = inputs[0], inputs[1], inputs[2], inputs[3]
 
         with tf.GradientTape() as tape:
-            # Encoder sees EVERYTHING (Text + Params + Audio)
             z_mean, z_log_var = self.encoder([text, params, audio])
-
             eps = tf.random.normal(shape=tf.shape(z_mean))
             z = z_mean + tf.exp(0.5 * z_log_var) * eps
-
-            # Latent Dropout
             dropout_mask = tf.cast(tf.random.uniform((tf.shape(z)[0], 1)) >= self.latent_dropout_rate, tf.float32)
             z_dec = z * dropout_mask
-
-            # Decoder tries to reconstruct everything
             y_pred = self.decoder([z_dec, text], training=True)
-
             total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, z_mean, z_log_var)
 
         grads = tape.gradient(total, self.trainable_variables)
@@ -1952,14 +847,11 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
     def test_step(self, data):
         inputs = data[0]
         text, params, audio, mask = inputs[0], inputs[1], inputs[2], inputs[3]
-
         z_mean, z_log_var = self.encoder([text, params, audio])
         eps = tf.random.normal(shape=tf.shape(z_mean))
         z = z_mean + tf.exp(0.5 * z_log_var) * eps
         y_pred = self.decoder([z, text], training=False)
-
         total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, z_mean, z_log_var)
-
         self.total_loss_tracker.update_state(total)
         self.reconstruction_loss_tracker.update_state(recon)
         self.kl_loss_tracker.update_state(kl)
@@ -1999,7 +891,6 @@ class SinusoidalTimeEmbedding(Layer):
     def __init__(self, dim, **kwargs):
         super().__init__(**kwargs)
         self.dim = dim
-
     def call(self, time):
         half_dim = self.dim // 2
         embeddings = tf.math.log(10000.0) / (half_dim - 1)
@@ -2007,7 +898,6 @@ class SinusoidalTimeEmbedding(Layer):
         embeddings = tf.cast(time, tf.float32) * embeddings[None, :]
         embeddings = tf.concat([tf.sin(embeddings), tf.cos(embeddings)], axis=-1)
         return embeddings
-
     def get_config(self):
         config = super().get_config()
         config.update({"dim": self.dim})
@@ -2032,7 +922,6 @@ class ResidualBlock(Layer):
         self.dense2 = Dense(width, activation="swish")
         self.drop2 = Dropout(dropout)
         self.film_proj = Dense(width * 4, activation=None)
-
     def call(self, x, conditions):
         residual = x
         film_params = self.film_proj(conditions)
@@ -2046,7 +935,6 @@ class ResidualBlock(Layer):
         x = self.dense2(x)
         x = self.drop2(x)
         return Add()([residual, x])
-
     def get_config(self):
         config = super().get_config()
         config.update({"width": self.width, "dropout": self.dropout_rate})
@@ -2060,7 +948,6 @@ class DiffusionScheduler:
         self.alphas_cumprod = tf.math.cumprod(self.alphas)
         self.sqrt_alphas_cumprod = tf.sqrt(self.alphas_cumprod)
         self.sqrt_one_minus_alphas_cumprod = tf.sqrt(1.0 - self.alphas_cumprod)
-
     def add_noise(self, original_samples, noise, timesteps):
         sqrt_alpha_prod = tf.gather(self.sqrt_alphas_cumprod, timesteps)
         sqrt_one_minus_alpha_prod = tf.gather(self.sqrt_one_minus_alphas_cumprod, timesteps)
@@ -2087,22 +974,18 @@ class LatentDiffusionModel(tf.keras.Model):
         inputs = data[0]
         text, params, audio = inputs[0], inputs[1], inputs[2]
         batch_size = tf.shape(params)[0]
-
         # 1. Encode with Frozen VAE (Need to pass ALL inputs now)
         z_mean, z_log_var = self.vae_encoder([text, params, audio], training=False)
         epsilon = tf.random.normal(shape=tf.shape(z_mean))
         z_0 = z_mean + tf.exp(0.5 * z_log_var) * epsilon
-
         # 2. Add Noise
         t = tf.random.uniform(minval=0, maxval=self.timesteps, shape=(batch_size,), dtype=tf.int32)
         noise = tf.random.normal(shape=tf.shape(z_0))
         z_t = self.scheduler.add_noise(z_0, noise, t)
-
         # 3. Train Denoiser
         with tf.GradientTape() as tape:
             pred_noise = self.denoiser([z_t, t, text], training=True)
             loss = tf.reduce_mean(tf.square(noise - pred_noise))
-
         gradients = tape.gradient(loss, self.denoiser.trainable_variables)
         self.optimizer.apply_gradients(zip(gradients, self.denoiser.trainable_variables))
         self.loss_tracker.update_state(loss)
@@ -2112,7 +995,6 @@ class LatentDiffusionModel(tf.keras.Model):
         inputs = data[0]
         text, params, audio = inputs[0], inputs[1], inputs[2]
         batch_size = tf.shape(params)[0]
-
         z_mean, z_log_var = self.vae_encoder([text, params, audio], training=False)
         epsilon = tf.random.normal(shape=tf.shape(z_mean))
         z_0 = z_mean + tf.exp(0.5 * z_log_var) * epsilon
@@ -2125,12 +1007,10 @@ class LatentDiffusionModel(tf.keras.Model):
         return {"loss": self.loss_tracker.result()}
 
     def generate(self, text_embeds, steps=50):
-        # Same as before, but note decoder now returns audio heads too
         text_embeds = tf.convert_to_tensor(text_embeds, dtype=tf.float32)
         batch_size = tf.shape(text_embeds)[0]
         latent_dim = self.vae_encoder.output_shape[0][1]
         z = tf.random.normal(shape=(batch_size, latent_dim))
-
         for i in reversed(range(0, self.timesteps)):
             t = tf.ones((batch_size,), dtype=tf.int32) * i
             pred_noise = self.denoiser([z, t, text_embeds], training=False)
@@ -2145,7 +1025,6 @@ class LatentDiffusionModel(tf.keras.Model):
                 z = model_mean + sigma * noise
             else:
                 z = model_mean
-
         decoded = self.vae_decoder([z, text_embeds], training=False)
         return decoded
 
@@ -2165,6 +1044,71 @@ class LatentDiffusionModel(tf.keras.Model):
         vae_decoder = deserialize_keras_object(config.pop("vae_decoder"))
         denoiser = deserialize_keras_object(config.pop("denoiser"))
         return cls(vae_encoder, vae_decoder, denoiser, **config)
+
+def build_encoder(embedding_dim, num_params, audio_dim, latent_dim, enc_width, dropout_rate=0.0):
+    text_in = Input(shape=(embedding_dim,), name="encoder_text_input")
+    params_in = Input(shape=(num_params,), name="encoder_params_input")
+    audio_in = Input(shape=(audio_dim,), name="encoder_audio_input")
+    x = Concatenate(name="encoder_concat")([text_in, params_in, audio_in])
+    x = Dense(enc_width, activation="linear")(x)
+    x = LayerNormalization()(x)
+    x = Activation("relu")(x)
+    x = Dense(enc_width, activation="linear")(x)
+    x = LayerNormalization()(x)
+    x = Activation("relu")(x)
+    z_mu = Dense(latent_dim, name="z_mean")(x)
+    z_log = Dense(latent_dim, name="z_log_var")(x)
+    return Model([text_in, params_in, audio_in], [z_mu, z_log], name="encoder")
+
+def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, bipolar_indices,
+                       bool_indices, cat_indices, categorical_num_classes, dropout_rate=0.0):
+    z_in = Input(shape=(latent_dim,), name="latent_input")
+    text_in = Input(shape=(embedding_dim,), name="decoder_text_input")
+    def film_block(x, text_in, width, block_id):
+        x = LayerNormalization(name=f"dec_ln_pre_{block_id}")(x)
+        gamma = Dense(width, kernel_initializer="zeros", bias_initializer="ones")(text_in)
+        beta = Dense(width, kernel_initializer="zeros", bias_initializer="zeros")(text_in)
+        x = FiLMLayer(name=f"film_{block_id}")([x, gamma, beta])
+        x = LeakyReLU(alpha=0.2)(x)
+        return x
+    x = Dense(dec_width)(z_in)
+    x = film_block(x, text_in, dec_width, 1)
+    x = Dense(dec_width)(x)
+    x = film_block(x, text_in, dec_width, 2)
+    x = Dense(dec_width)(x)
+    x = LayerNormalization()(x)
+    x = Activation("relu")(x)
+    outs = []
+    if unipolar_indices:
+        outs.append(Dense(len(unipolar_indices), activation="sigmoid", name="unipolar_outputs")(x))
+    if bipolar_indices:
+        outs.append(Dense(len(bipolar_indices), activation="linear", name="bipolar_gate")(x))
+        outs.append(Dense(len(bipolar_indices), activation="tanh", name="bipolar_value")(x))
+    if bool_indices:
+        outs.append(Dense(len(bool_indices), activation="sigmoid", name="boolean_outputs")(x))
+    for j in sorted(cat_indices):
+        outs.append(Dense(categorical_num_classes[int(j)], activation="softmax", name=f"cat_{j}")(x))
+    # NEW: Audio Embeddings
+    outs.append(Dense(512, activation="linear", name="osc_a_embed")(x))
+    outs.append(Dense(512, activation="linear", name="osc_b_embed")(x))
+    outs.append(Dense(512, activation="linear", name="osc_n_embed")(x))
+    return Model([z_in, text_in], outs, name="decoder_film")
+
+def build_resmlp_denoiser(latent_dim=128, text_embed_dim=512, hidden_dim=512, num_layers=8):
+    z_noisy = Input(shape=(latent_dim,), name="z_noisy")
+    t_in = Input(shape=(1,), name="time_input")
+    text_emb = Input(shape=(text_embed_dim,), name="text_embedding")
+    t_emb = SinusoidalTimeEmbedding(dim=hidden_dim)(t_in)
+    t_emb = Dense(hidden_dim, activation="swish")(t_emb)
+    x = Dense(hidden_dim)(z_noisy)
+    cond_concat = Concatenate()([t_emb, text_emb])
+    cond_mapped = Dense(hidden_dim, activation="swish")(cond_concat)
+    cond_mapped = Dense(hidden_dim, activation="swish")(cond_mapped)
+    for i in range(num_layers):
+        x = ResidualBlock(width=hidden_dim, name=f"res_block_{i}")(x, cond_mapped)
+    x = LayerNormalization()(x)
+    noise_pred = Dense(latent_dim, activation="linear", name="noise_pred")(x)
+    return Model(inputs=[z_noisy, t_in, text_emb], outputs=noise_pred, name="resmlp_denoiser")
 
 """## Define Model Builders"""
 
@@ -2201,9 +1145,9 @@ def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, b
                         bool_indices, cat_indices, categorical_num_classes, dropout_rate=0.0):
     """
     Builds p(params, audio | z, text)
-    Outputs:
-      - All parameter heads (Knobs)
-      - 3 NEW heads for Audio Embeddings (Osc A, Osc B, Noise)
+    IMPLEMENTS STOP GRADIENT:
+      - Path A (Knobs): Gradients flow to Z.
+      - Path B (Audio): Gradients blocked at Z.
     """
     z_in = Input(shape=(latent_dim,), name="latent_input")
     text_in = Input(shape=(embedding_dim,), name="decoder_text_input")
@@ -2217,6 +1161,7 @@ def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, b
         x = LeakyReLU(alpha=0.2)(x)
         return x
 
+    # --- PATH A: MAIN PARAMETER PATH (Gradients Flow) ---
     x = Dense(dec_width)(z_in)
     x = film_block(x, text_in, dec_width, 1)
     x = Dense(dec_width)(x)
@@ -2227,7 +1172,7 @@ def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, b
 
     outs = []
 
-    # --- 1. Parameter Heads (Knobs) ---
+    # 1. Parameter Heads (Attached to Path A)
     if unipolar_indices:
         outs.append(Dense(len(unipolar_indices), activation="sigmoid", name="unipolar_outputs")(x))
     if bipolar_indices:
@@ -2238,11 +1183,20 @@ def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, b
     for j in sorted(cat_indices):
         outs.append(Dense(categorical_num_classes[int(j)], activation="softmax", name=f"cat_{j}")(x))
 
-    # --- 2. Audio Embedding Heads (THE NEW PART) ---
-    # These predict the 512-dim vectors for each oscillator
-    outs.append(Dense(512, activation="linear", name="osc_a_embed")(x))
-    outs.append(Dense(512, activation="linear", name="osc_b_embed")(x))
-    outs.append(Dense(512, activation="linear", name="osc_n_embed")(x))
+    # --- PATH B: AUDIO SIDECAR PATH (Gradients Blocked) ---
+    # FIX: Use a Lambda layer to wrap the TensorFlow op so Keras can track it
+    z_safe = tf.keras.layers.Lambda(lambda x: tf.stop_gradient(x), name="audio_stop_grad")(z_in)
+
+    # We give the audio sidecar its own small dense network to map Z->Audio
+    x_aud = Dense(dec_width)(z_safe)
+    x_aud = film_block(x_aud, text_in, dec_width, "audio_sidecar") # Condition on text again
+    x_aud = LayerNormalization()(x_aud)
+    x_aud = Activation("relu")(x_aud)
+
+    # 2. Audio Embedding Heads (Attached to Path B)
+    outs.append(Dense(512, activation="linear", name="osc_a_embed")(x_aud))
+    outs.append(Dense(512, activation="linear", name="osc_b_embed")(x_aud))
+    outs.append(Dense(512, activation="linear", name="osc_n_embed")(x_aud))
 
     return Model([z_in, text_in], outs, name="decoder_film")
 
@@ -2271,27 +1225,19 @@ def build_resmlp_denoiser(latent_dim=128, text_embed_dim=512, hidden_dim=512, nu
 
 """## Compile and Train"""
 
-# Cell 3.4
+# Cell 3.4 — VAE Hyperparameter Grid Search (The "Battle")
 
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
+import pandas as pd
 import os
+import time
 
-# --- CONFIG ---
-latent_dim = 128
-vae_epochs = 40
-diffusion_epochs = 60
-lr = 1e-3
-batch_size = 64
+# --- 1. SETUP DATA SHAPES ---
+actual_num_params = X_train_params.shape[1]
+audio_dim = X_train_audio.shape[1]
 
-# --- 1. DYNAMICALLY ALIGN MODEL TO DATA ---
-# This fixes the "205 vs 202" crash. We use the actual data shape.
-actual_num_params = X_train_params.shape[1] # Should be 202
-audio_dim = X_train_audio.shape[1]          # Should be 1536 (3 * 512)
-
-print(f"✅ Configured Model Inputs: {actual_num_params} Params, {audio_dim} Audio Features")
-
-# Filter dictionary indices that exceed the actual data size
+# Filter indices safely (as before)
 def filter_indices(indices, limit):
     return [i for i in indices if i < limit]
 
@@ -2301,20 +1247,95 @@ safe_bool = filter_indices(boolean_param_indices, actual_num_params)
 safe_cat = filter_indices(categorical_param_indices, actual_num_params)
 safe_classes = {k: v for k, v in categorical_num_classes.items() if k < actual_num_params}
 
-# --- STAGE 1: TRAIN VAE (Compression) ---
-print("\n=== STAGE 1: Training VAE (Compression) ===")
+# --- 2. DEFINE THE GRID SEARCH ---
+# NOTE: With Stop Gradient, we can use higher W_AUDIO without hurting knobs.
+SEARCH_GRID = [
+    {"latent_dim": 128, "w_audio": 1.0},
+    # {"latent_dim": 256, "w_audio": 1.0},
+]
+
+results = []
+best_loss = float('inf')
+best_config = None
+
+print(f"⚔️ STARTING HYPERPARAMETER BATTLE: {len(SEARCH_GRID)} Candidates\n")
+
+for i, config in enumerate(SEARCH_GRID):
+    l_dim = config["latent_dim"]
+    w_aud = config["w_audio"]
+
+    print(f"--- Round {i+1}: Latent Dim={l_dim}, Audio Weight={w_aud} ---")
+
+    # 1. Update Global Hyperparameter
+    global W_AUDIO
+    W_AUDIO = w_aud
+
+    # 2. Build Fresh Model
+    tf.keras.backend.clear_session()
+
+    enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim, l_dim, 256)
+    dec = build_decoder_film(X_train_text.shape[1], l_dim, 512,
+                             safe_unipolar, safe_bipolar, safe_bool,
+                             safe_cat, safe_classes)
+
+    vae = VAE_Text_to_Synth_Audio(
+        encoder=enc, decoder=dec,
+        unipolar_indices=safe_unipolar, bipolar_indices=safe_bipolar,
+        bool_indices=safe_bool, cat_indices=safe_cat,
+        categorical_num_classes=safe_classes, group_masking_map=GROUP_MASKING_MAP,
+        latent_dim=l_dim, beta=1.0, latent_dropout_rate=0.1
+    )
+
+    vae.compile(optimizer=Adam(learning_rate=1e-3))
+
+    # 3. Fast Training Sprint (5 Epochs only)
+    hist = vae.fit(
+        x=[X_train_text, X_train_params, X_train_audio, X_train_mask],
+        epochs=5,
+        batch_size=64,
+        validation_data=([X_val_text, X_val_params, X_val_audio, X_val_mask], None),
+        verbose=0 # Silent training
+    )
+
+    # 4. Capture Metrics from last epoch
+    final_val_loss = hist.history['val_loss'][-1]
+    final_recon = hist.history['val_recon'][-1]
+    final_audio_loss = hist.history['val_audio'][-1]
+
+    print(f"   Result -> Total Val Loss: {final_val_loss:.4f} | Recon (Knobs): {final_recon:.4f} | Audio: {final_audio_loss:.4f}")
+
+    results.append({
+        "latent_dim": l_dim,
+        "w_audio": w_aud,
+        "val_loss": final_val_loss,
+        "val_recon": final_recon,
+        "val_audio": final_audio_loss
+    })
+
+    if final_val_loss < best_loss:
+        best_loss = final_val_loss
+        best_config = config
+
+# --- 3. RESULTS SUMMARY ---
+print("\n🏆 BATTLE RESULTS 🏆")
+df_res = pd.DataFrame(results).sort_values("val_loss")
+print(df_res)
+
+print(f"\n✅ WINNER: Latent Dim = {best_config['latent_dim']}, W_AUDIO = {best_config['w_audio']}")
+
+# --- 4. RETRAIN WINNER (Full Training) ---
+print(f"\n🚀 Retraining WINNER for full 40 epochs...")
+
+W_AUDIO = best_config["w_audio"]
+latent_dim = best_config["latent_dim"]
 
 tf.keras.backend.clear_session()
 
-# A. Build Encoder (Inputs: Text + 202 Params + 1536 Audio)
 enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim, latent_dim, 256)
-
-# B. Build Decoder (Outputs: 202 Params + 3x512 Audio Vectors)
 dec = build_decoder_film(X_train_text.shape[1], latent_dim, 512,
                          safe_unipolar, safe_bipolar, safe_bool,
                          safe_cat, safe_classes)
 
-# C. Compile VAE
 vae = VAE_Text_to_Synth_Audio(
     encoder=enc, decoder=dec,
     unipolar_indices=safe_unipolar, bipolar_indices=safe_bipolar,
@@ -2323,56 +1344,43 @@ vae = VAE_Text_to_Synth_Audio(
     latent_dim=latent_dim, beta=1.0, latent_dropout_rate=0.1
 )
 
-vae.compile(optimizer=Adam(learning_rate=lr))
+vae.compile(optimizer=Adam(learning_rate=1e-3))
 
 callbacks_vae = [
     tf.keras.callbacks.EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
     BetaAnnealing(max_beta=1.0, warmup_epochs=10)
 ]
 
-# D. Train
-# Note: we pass ALL data [text, params, audio, mask] so the loss function can see everything
 vae.fit(
     x=[X_train_text, X_train_params, X_train_audio, X_train_mask],
-    epochs=vae_epochs,
-    batch_size=batch_size,
+    epochs=40,
+    batch_size=64,
     validation_data=([X_val_text, X_val_params, X_val_audio, X_val_mask], None),
     callbacks=callbacks_vae,
     verbose=1
 )
 
-vae_save_path = os.path.join(SAVE_DIR, "vae_stage1_audio.keras")
-vae.save(vae_save_path)
-print(f"✅ VAE Saved to {vae_save_path}")
+vae.save(os.path.join(SAVE_DIR, "vae_stage1_tuned.keras"))
 
-# --- STAGE 2: TRAIN DIFFUSION ---
+# --- 5. TRAIN DIFFUSION (Using Tuned VAE) ---
 print("\n=== STAGE 2: Training Diffusion (Generation) ===")
-
-# Freeze the VAE (It is now a fixed "Compression Engine")
 vae.trainable = False
-vae.encoder.trainable = False
-vae.decoder.trainable = False
 
-# Build Denoiser
 denoiser = build_resmlp_denoiser(latent_dim=latent_dim, text_embed_dim=X_train_text.shape[1])
 ldm = LatentDiffusionModel(vae_encoder=vae.encoder, vae_decoder=vae.decoder, denoiser=denoiser, timesteps=1000)
 
 ldm.compile(optimizer=Adam(learning_rate=1e-4))
 
-# Train Diffusion
-# The LDM uses the VAE encoder to turn [Params + Audio] into Latents, then learns to generate those Latents from noise.
 ldm.fit(
     x=[X_train_text, X_train_params, X_train_audio, X_train_mask],
-    epochs=diffusion_epochs,
-    batch_size=batch_size,
+    epochs=60,
+    batch_size=64,
     validation_data=([X_val_text, X_val_params, X_val_audio, X_val_mask], None),
     verbose=1
 )
 
-ldm_save_path = os.path.join(SAVE_DIR, "ldm_final_audio.keras")
-ldm.save(ldm_save_path)
+ldm.save(os.path.join(SAVE_DIR, "ldm_final_tuned.keras"))
 best_model = ldm
-print(f"✅ LDM Saved to {ldm_save_path}")
 
 """## Evaluate and Save Model"""
 
@@ -2460,16 +1468,14 @@ def find_nearest_matches(query_vec, library_embeds, library_names, top_k=3):
     if query_norm > 1e-6:
         query_vec = query_vec / query_norm
 
-    # 2. Normalize Library (Pre-calculating this globally would be faster, but this is safe)
+    # 2. Normalize Library
     lib_norms = np.linalg.norm(library_embeds, axis=1, keepdims=True)
     lib_embeds_norm = library_embeds / (lib_norms + 1e-6)
 
-    # 3. Cosine Similarity (Dot Product of normalized vectors)
-    # Shape: (N_library_items, )
+    # 3. Cosine Similarity
     scores = np.dot(lib_embeds_norm, query_vec)
 
     # 4. Get Top K indices
-    # argsort sorts ascending, so we take the last k and reverse them
     top_indices = np.argsort(scores)[-top_k:][::-1]
 
     # 5. Retrieve Names and Scores
@@ -2484,16 +1490,18 @@ def find_nearest_matches(query_vec, library_embeds, library_names, top_k=3):
 def reconstruct_parameters_from_heads(predicted_outputs, parameter_types, categorical_num_classes, sample_categorical=True, noise_level=0.0):
     """
     Reconstructs parameter vector from split heads AND retrieves audio embeddings + matches.
-    Returns: (reconstructed_params, generated_audio_info)
+    Assumes parameter_types is ALREADY CLEAN (ids 0-201).
     """
     n_params = len(parameter_types)
     reconstructed = np.zeros(n_params, dtype=np.float32)
 
-    # Filter out the "Ignored" IDs (4, 24, 44)
-    valid_param_types = {k:v for k,v in parameter_types.items() if int(k) not in [4, 24, 44]}
+    # We use the clean dictionary directly
+    valid_param_types = parameter_types
 
     continuous_params = [int(i) for i, p in valid_param_types.items() if p["type"] == "continuous"]
-    mod_matrix_ids = set(range(173, 205))
+
+    # Recalculate Mod Matrix Range based on cleaned indices (starts at 170)
+    mod_matrix_ids = set(range(170, 202))
 
     unipolar_indices = sorted([i for i in continuous_params if i not in mod_matrix_ids])
     bipolar_indices = sorted([i for i in continuous_params if i in mod_matrix_ids])
@@ -2502,7 +1510,7 @@ def reconstruct_parameters_from_heads(predicted_outputs, parameter_types, catego
 
     head_idx = 0
 
-    # --- 1. RECONSTRUCT KNOBS (With Bounds Checking) ---
+    # --- 1. RECONSTRUCT KNOBS ---
 
     # A. Unipolar
     if unipolar_indices:
@@ -2554,8 +1562,7 @@ def reconstruct_parameters_from_heads(predicted_outputs, parameter_types, catego
             reconstructed[param_idx] = float(choice) / max(1, (num_c - 1))
         head_idx += 1
 
-    # --- 2. RETRIEVE AUDIO EMBEDDINGS & FIND MATCHES ---
-    # The last 3 heads are always Osc A, Osc B, Osc N
+    # --- 2. RETRIEVE AUDIO EMBEDDINGS ---
     def extract_embed(h):
         return np.array(h, dtype=np.float32).reshape(512)
 
@@ -2564,22 +1571,13 @@ def reconstruct_parameters_from_heads(predicted_outputs, parameter_types, catego
         osc_b_vec = extract_embed(predicted_outputs[-2])
         osc_n_vec = extract_embed(predicted_outputs[-1])
 
-        # NEW: Find matches from global library
         a_matches = find_nearest_matches(osc_a_vec, WT_LIB_EMBEDS, WT_LIB_NAMES)
         b_matches = find_nearest_matches(osc_b_vec, WT_LIB_EMBEDS, WT_LIB_NAMES)
         n_matches = find_nearest_matches(osc_n_vec, NOISE_LIB_EMBEDS, NOISE_LIB_NAMES)
 
         audio_dict = {
-            "vectors": {
-                "osc_a": osc_a_vec,
-                "osc_b": osc_b_vec,
-                "noise": osc_n_vec
-            },
-            "matches": {
-                "osc_a": a_matches,
-                "osc_b": b_matches,
-                "noise": n_matches
-            }
+            "vectors": { "osc_a": osc_a_vec, "osc_b": osc_b_vec, "noise": osc_n_vec },
+            "matches": { "osc_a": a_matches, "osc_b": b_matches, "noise": n_matches }
         }
     except IndexError:
         print("Warning: Audio heads not found in output.")
@@ -2595,14 +1593,9 @@ def generate_synth_parameters_vae(text_description, model, parameter_types, cate
         tf.random.set_seed(seed)
         torch.manual_seed(seed)
 
-    # 1. Encode Text
     emb = clap_encode_text([text_description])
-
-    # 2. Run Diffusion Generation Loop
     print(f"Diffusion Sampling for: '{text_description}'...")
     preds = model.generate(emb, steps=1000)
-
-    # 3. Reconstruct
     return reconstruct_parameters_from_heads(preds, parameter_types, categorical_num_classes, sample_categorical=sample_categorical, noise_level=noise_level)
 
 def numpy_to_json(parameter_array, serum_parameters):
@@ -2618,11 +1611,10 @@ def numpy_to_json(parameter_array, serum_parameters):
             entry = param_def.copy()
             entry["value"] = float(val)
             output_json[str(idx)] = entry
-
     return output_json
 
 # ==============================================================================
-# 2. LOAD MODEL (If not already in memory)
+# 2. LOAD MODEL
 # ==============================================================================
 
 if 'best_model' not in globals():
@@ -2662,21 +1654,10 @@ if 'best_model' in globals():
     print("\n--- Generated Parameter Snippet ---")
     print(json.dumps({k: preset_json[k] for k in list(preset_json.keys())[:3]}, indent=2))
 
-    print("\n--- Generated Audio Predictions (Top 3 Matches) ---")
     if generated_audio and "matches" in generated_audio:
         matches = generated_audio["matches"]
-
         print("\n[Oscillator A Matches]:")
-        for m in matches["osc_a"]:
-            print(f"  - {m['name']} (Score: {m['score']:.3f})")
-
-        print("\n[Oscillator B Matches]:")
-        for m in matches["osc_b"]:
-            print(f"  - {m['name']} (Score: {m['score']:.3f})")
-
-        print("\n[Noise Matches]:")
-        for m in matches["noise"]:
-            print(f"  - {m['name']} (Score: {m['score']:.3f})")
+        for m in matches["osc_a"]: print(f"  - {m['name']} ({m['score']:.3f})")
 
 # Cell 4.2
 
@@ -2730,7 +1711,7 @@ if generated_audio:
             print(f"  - {m['name']} (Score: {m['score']:.3f})")
 
 print("\n--- Full JSON Snippet (First 3 items) ---")
-print(json.dumps({k: preset_json[k] for k in list(preset_json.keys())[:3]}, indent=2))
+print(json.dumps({k: preset_json[k] for k in list(preset_json.keys())[:]}, indent=2))
 
 """# Data Interpolation and Visualization
 
@@ -2743,34 +1724,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# --- 1. Helper to find correct indices (handling the shifted IDs) ---
+# --- 1. Helper to find correct indices ---
 def get_param_index(target_name, serum_parameters):
     """
-    Finds the array index of a parameter by name, accounting for
-    the removed Wavetable/Noise parameters (IDs 4, 24, 44).
+    Finds the array index of a parameter by name.
+    Since SERUM_PARAMETERS is now clean (0-201), we can just lookup directly.
     """
-    current_idx = 0
-    ignored_ids = {4, 24, 44} # The IDs we removed from the dataset
-
-    # Iterate in the exact same order as the data loader
-    ordered_groups = [
-        "global", "osc_a", "osc_b", "noise_osc", "sub_osc", "filter",
-        "envelopes", "lfos", "fx_hyper_dimension", "fx_distortion",
-        "fx_flanger", "fx_phaser", "fx_chorus", "fx_delay",
-        "fx_compressor", "fx_reverb", "fx_eq", "fx_filter", "mod_matrix"
-    ]
-
-    for group in ordered_groups:
-        if group not in serum_parameters: continue
-        for p in serum_parameters[group]:
-            p_id = int(p['id'])
-
-            if p_id in ignored_ids: continue # Skip these
-
+    # Iterate through all groups
+    for group_name, params in serum_parameters.items():
+        for p in params:
             if p['name'] == target_name:
-                return current_idx
-
-            current_idx += 1
+                return int(p['id'])
     return None
 
 # --- 2. Interpolation Function ---
@@ -2782,7 +1746,7 @@ def interpolate_prompts(model, start_prompt, end_prompt, steps=10, z_seed=42):
     emb_start = clap_encode_text([start_prompt])[0]
     emb_end = clap_encode_text([end_prompt])[0]
 
-    # B. Fixed Z (use mean 0 for "standard" representation)
+    # B. Fixed Z
     np.random.seed(z_seed)
     z_fixed = np.random.normal(size=(1, int(model.vae_encoder.output_shape[0][1]))).astype('float32')
 
@@ -2803,7 +1767,6 @@ def interpolate_prompts(model, start_prompt, end_prompt, steps=10, z_seed=42):
         # Reconstruct
         param_map = {int(p['id']): p for g in SERUM_PARAMETERS.values() for p in g}
 
-        # !!! FIX: Unpack the tuple to get only the params array
         params, _ = reconstruct_parameters_from_heads(
             preds,
             parameter_types=param_map,
@@ -2823,11 +1786,10 @@ if 'best_model' in globals():
     interp_data, alphas = interpolate_prompts(best_model, prompt_a, prompt_b, steps=20)
 
     # --- PARAMETERS TO TRACK ---
-    # We use names instead of hardcoded IDs to be safe against index shifts
     target_params = [
         {"name": "A Octave",       "color": "blue"},
         {"name": "Sub Osc Level",  "color": "darkgreen"},
-        {"name": "Fil Cutoff",     "color": "red"},        # Note: Name is 'Fil Cutoff' in dict
+        {"name": "Fil Cutoff",     "color": "red"},
         {"name": "Fil Reso",       "color": "orange"},
         {"name": "Env1 Atk",       "color": "purple"},
         {"name": "LFO1 Rate",      "color": "brown"},
@@ -2839,7 +1801,6 @@ if 'best_model' in globals():
     plt.figure(figsize=(12, 6))
 
     for p in target_params:
-        # Dynamically find the index
         col_idx = get_param_index(p["name"], SERUM_PARAMETERS)
 
         if col_idx is not None and col_idx < interp_data.shape[1]:

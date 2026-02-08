@@ -54,10 +54,12 @@ class ParameterUtils:
         param_map = {int(p['id']): p for g in serum_parameters.values() for p in g}
         
         # Filter out the "Ignored" IDs (4, 24, 44) - Wavetable/Noise IDs usually handled separately
-        valid_param_types = {k:v for k,v in param_map.items() if int(k) not in [4, 24, 44]}
+        # valid_param_types = {k:v for k,v in param_map.items() if int(k) not in [4, 24, 44]}
+        valid_param_types = param_map
         
         continuous_params = [int(i) for i, p in valid_param_types.items() if p["type"] == "continuous"]
-        mod_matrix_ids = set(range(173, 205))
+        # Mod Matrix is now roughly indices 170 to 201 (since we removed 3 items before it)
+        mod_matrix_ids = set(range(170, 202))
 
         unipolar_indices = sorted([i for i in continuous_params if i not in mod_matrix_ids])
         bipolar_indices = sorted([i for i in continuous_params if i in mod_matrix_ids])
@@ -91,10 +93,10 @@ class ParameterUtils:
         
         param_info: Result from get_indices_and_classes() containing indices and maps.
         """
-        n_params = 205 # Fixed max size for Serum params usually
+        n_params = 202 # Fixed max size for Serum params usually
         # Or use param_info['n_params'] if we trust it covers the max ID. 
-        # Safest to use strict 205 or max(param_map.keys()) + 1
-        max_id = max(param_info['unipolar_indices'] + param_info['bipolar_indices'] + param_info['bool_indices'] + param_info['cat_indices'] + [204])
+        # Safest to use strict 202 or max(param_map.keys()) + 1
+        max_id = max(param_info['unipolar_indices'] + param_info['bipolar_indices'] + param_info['bool_indices'] + param_info['cat_indices'] + [201])
         n_params = max_id + 1
         
         reconstructed = np.zeros(n_params, dtype=np.float32)
@@ -340,6 +342,37 @@ class LatentDiffusionModel(tf.keras.Model):
     def call(self, inputs, training=False):
         return self.denoiser(inputs, training=training)
 
+    @tf.function
+    def _diffusion_loop_compiled(self, z, text_embeds, timestep_indices):
+        """Graph-optimized diffusion loop (No XLA to prevent potential hanging on large unrolls)"""
+        # Iterate over the tensor of timestep indices
+        for i in timestep_indices:
+            batch_size = tf.shape(text_embeds)[0]
+            t = tf.ones((batch_size,), dtype=tf.int32) * i
+            
+            # Predict noise
+            pred_noise = self.denoiser([z, t, text_embeds], training=False)
+            
+            alpha = tf.gather(self.scheduler.alphas, i)
+            alpha_cumprod = tf.gather(self.scheduler.alphas_cumprod, i)
+            beta = tf.gather(self.scheduler.betas, i)
+            
+            sqrt_one_minus_alpha_cumprod = tf.sqrt(1.0 - alpha_cumprod)
+            model_mean = (1 / tf.sqrt(alpha)) * (z - ((1 - alpha) / (sqrt_one_minus_alpha_cumprod)) * pred_noise)
+            
+            # Use tf.cond for conditional logic inside graph
+            def add_noise():
+                noise = tf.random.normal(shape=tf.shape(z))
+                sigma = tf.sqrt(beta)
+                return model_mean + sigma * noise
+                
+            def no_noise():
+                return model_mean
+                
+            z = tf.cond(i > 0, add_noise, no_noise)
+            
+        return z
+
     def generate(self, text_description, diffusion_steps=50, seed=None, verbose=False):
         # 1. Encode Text
         if verbose: print("Encoding text...")
@@ -365,50 +398,23 @@ class LatentDiffusionModel(tf.keras.Model):
 
         z = tf.random.normal(shape=(batch_size, latent_dim))
         
-        # Use simple DDPM sampling as in the notebook
-        if verbose: print(f"Sampling with {diffusion_steps} steps...")
+        if verbose: print(f"Sampling with {diffusion_steps} steps (JIT Compile)...")
         
-        # NOTE: Notebook uses full timesteps loop but user might want fewer steps (DDIM style)
-        # For strict fidelity to notebook, we should use the scheduler logic.
-        # However, the notebook implementation iterates reversed(range(0, self.timesteps))
-        # modifying `diffusion_steps` only changes the loop if we implemented a strided scheduler.
-        # The notebook code provided in `generate` method:
-        # for i in reversed(range(0, self.timesteps)): ...
-        # If we want to support fewer steps we need a proper sampler.
-        # For now, let's respect the `diffusion_steps` arg by mapping it to the scheduler if possible,
-        # OR just running the full loop if that's what the notebook does.
-        # Re-reading notebook: `def generate(self, text_embeds, steps=50):`
-        # BUT the loop inside is `for i in reversed(range(0, self.timesteps)):`
-        # It seems the notebook ignores `steps` argument in the loop range! 
-        # I will implement a skip-step sampler to respect `diffusion_steps`.
-        
-        step_ratio = self.timesteps // diffusion_steps
-        timesteps_to_run = list(range(0, self.timesteps, step_ratio))[::-1]
+        # Determine timestep indices
+        # We need to construct a Tensor of indices to iterate over in the graph
+        if diffusion_steps is None or diffusion_steps >= self.timesteps:
+            # Full inverse range: [999, 998, ... 0]
+            timestep_indices = tf.range(self.timesteps - 1, -1, -1, dtype=tf.int32)
+        else:
+            # Strided range
+            step_ratio = self.timesteps // diffusion_steps
+            # Python list construction for strided range, then convert to tensor
+            # range(0, 1000, 20) -> [0, 20, 40...] -> reverse -> [980, ..., 0]
+            # TF range supports negative delta directly
+            timestep_indices = tf.range(self.timesteps - 1, -1, -step_ratio, dtype=tf.int32)
 
-        for i in timesteps_to_run:
-            t = tf.ones((batch_size,), dtype=tf.int32) * i
-            pred_noise = self.denoiser([z, t, text_embeds], training=False)
-            
-            alpha = tf.gather(self.scheduler.alphas, i)
-            alpha_cumprod = tf.gather(self.scheduler.alphas_cumprod, i)
-            beta = tf.gather(self.scheduler.betas, i)
-            
-            # Correction: Notebook uses self.timesteps loop. 
-            # If we skip steps, we should probably scale variance.
-            # For safety/correctness relative to the notebook training, let's stick to the notebook logic 
-            # but allow mapped steps if the user really requested it. 
-            # Actually, standard DDPM sampling requires all steps. 
-            # Let's use the full 1000 steps if diffusion_steps is not passed or equals timesteps.
-            
-            sqrt_one_minus_alpha_cumprod = tf.sqrt(1.0 - alpha_cumprod)
-            model_mean = (1 / tf.sqrt(alpha)) * (z - ((1 - alpha) / (sqrt_one_minus_alpha_cumprod)) * pred_noise)
-            
-            if i > 0:
-                noise = tf.random.normal(shape=tf.shape(z))
-                sigma = tf.sqrt(beta)
-                z = model_mean + sigma * noise
-            else:
-                z = model_mean
+        # Run compiled loop
+        z = self._diffusion_loop_compiled(z, text_embeds, timestep_indices)
 
         if verbose: print("Decoding...")
         decoded = self.vae_decoder([z, text_embeds], training=False)
