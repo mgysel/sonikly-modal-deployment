@@ -190,9 +190,6 @@ except Exception as e:
     print("Check your Drive permissions or path string.")
 
 # Cell 1.4 — Initialize CLAP Text Encoder
-# This model converts natural language descriptions into 512-dimensional
-# embeddings that will guide the Audio VAE via FiLM layers.
-
 import torch
 from transformers import ClapModel, ClapProcessor
 
@@ -200,52 +197,69 @@ from transformers import ClapModel, ClapProcessor
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # CLAP Model Initialization
-# We load the fused version of CLAP (better at capturing fine-grained audio detail)
 clap_model_name = "laion/clap-htsat-fused"
 clap_model = ClapModel.from_pretrained(clap_model_name).to(device)
 clap_processor = ClapProcessor.from_pretrained(clap_model_name)
 
-# Set to 'eval' to disable dropout/batch norm updates; ensures consistent embeddings.
+# Set to 'eval' to disable dropout/batch norm updates
 clap_model.eval()
 
-@torch.no_grad() # Disable gradient calculation to save VRAM on the T4
-def clap_encode_text(texts, batch_size=128, normalize=True, max_length=None):
+@torch.no_grad()
+def clap_encode_text(texts, batch_size=128, normalize=True, max_length=77):
     """
     Encodes a list of strings into a NumPy array of embeddings.
-
-    Args:
-        texts (list): Sentences describing audio (e.g., "Gritty dubstep bass").
-        batch_size (int): Number of texts to process at once on the GPU.
-        normalize (bool): If True, output vectors have a unit length of 1.
-
-    Returns:
-        np.ndarray: Matrix of shape (len(texts), 512).
     """
     out = []
+    # Ensure inputs are a list of strings
+    if isinstance(texts, np.ndarray):
+        texts = texts.tolist()
+
     for i in range(0, len(texts), batch_size):
-        # Ensure all inputs are strings to avoid tokenizer errors
         batch = [str(t) for t in texts[i:i+batch_size]]
 
-        # Tokenize: Convert text to fixed-length tensors for the Transformer
+        # FIX 1: Force max_length padding.
+        # This ensures every batch output has shape (B, 77, ...) preventing cat errors
+        # even if we accidentally grab the sequence hidden states.
         inputs = clap_processor(
             text=batch,
             return_tensors="pt",
-            padding=True,
+            padding="max_length", # <--- FORCE FIXED LENGTH
             truncation=True,
             max_length=max_length
         ).to(device)
 
-        # Forward pass: Extract the 512-dimensional 'meaning' of the text
-        feats = clap_model.get_text_features(**inputs)  # Output shape: [Batch, 512]
+        # Forward pass
+        outputs = clap_model.get_text_features(**inputs)
 
-        # L2 Normalization: Keeps embedding values stable for the VAE's FiLM layers
+        # FIX 2: Explicitly handle output types to ensure (Batch, 512)
+        if isinstance(outputs, torch.Tensor):
+            feats = outputs
+        elif hasattr(outputs, 'text_embeds'):
+            feats = outputs.text_embeds
+        elif hasattr(outputs, 'text_features'): # Sometimes named this
+            feats = outputs.text_features
+        else:
+             # Fallback: If we got a sequence (B, T, D), assume [0] is expected output or pool it
+            temp = outputs[0]
+            if len(temp.shape) == 3:
+                # If we accidentally got (Batch, Seq, Dim), take the CLS token or mean
+                # CLAP usually uses the projection, but if we are here, something is odd.
+                # Take the first token (CLS equivalent) or max pool
+                feats = temp.mean(dim=1)
+            else:
+                feats = temp
+
+        # Verify shape is 2D (Batch, Dim) before normalizing
+        if len(feats.shape) == 3:
+             feats = feats.mean(dim=1) # Flatten if still 3D
+
+        # L2 Normalization
         if normalize:
             feats = torch.nn.functional.normalize(feats, dim=-1)
 
-        # Move back to CPU to free up GPU memory for the TensorFlow VAE
         out.append(feats.cpu())
 
-    # Concatenate batches and convert to NumPy (the standard format for TF/Keras)
+    # Concatenate - now safe because size is fixed
     return torch.cat(out, dim=0).numpy()
 
 print(f"✅ CLAP loaded and ready on: {device}")
@@ -669,11 +683,11 @@ from tensorflow.keras.utils import register_keras_serializable
 from keras.saving import serialize_keras_object, deserialize_keras_object
 
 # --- 0. HYPERPARAMETER CONSTANTS ---
-W_CONT      = 10.0   # Weight for continuous knobs
-W_BOOL      = 5.0    # Weight for switches
-W_CAT       = 15.0   # Weight for menus
-W_MOD_GATE  = 5.0    # Weight for modulation slots
-W_AUDIO     = 0.5    # REDUCED from 2.0 to avoid overwhelming the latent space
+W_CONT      = 10.0
+W_BOOL      = 5.0
+W_CAT       = 15.0
+W_MOD_GATE  = 5.0
+W_AUDIO     = 1.0
 
 # ==============================================================================
 # 1. SHARED LAYERS
@@ -684,6 +698,11 @@ class FiLMLayer(Layer):
     def call(self, inputs):
         x, gamma, beta = inputs
         return x * gamma + beta
+
+@register_keras_serializable(package="custom", name="StopGradient")
+class StopGradient(Layer):
+    def call(self, inputs):
+        return tf.stop_gradient(inputs)
 
 def sigmoid_focal_crossentropy(y_true, y_pred, alpha=0.25, gamma=2.0, from_logits=True):
     if from_logits: y_pred = tf.sigmoid(y_pred)
@@ -707,7 +726,8 @@ class BetaAnnealing(tf.keras.callbacks.Callback):
 class VAE_Text_to_Synth_Audio(tf.keras.Model):
     def __init__(self, encoder, decoder, unipolar_indices, bipolar_indices,
                  bool_indices, cat_indices, categorical_num_classes, group_masking_map,
-                 latent_dim, beta=1.0, latent_dropout_rate=0.0, **kwargs):
+                 latent_dim_params, latent_dim_audio, latent_dim_total,
+                 beta=1.0, latent_dropout_rate=0.0, **kwargs):
         super().__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
@@ -718,7 +738,11 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         self.categorical_num_classes = {int(k): int(v) for k, v in categorical_num_classes.items()}
         self.group_masking_map = {int(k): [int(x) for x in v] for k, v in (group_masking_map or {}).items()}
         self.param_to_enable = {int(pid): int(eid) for eid, mids in self.group_masking_map.items() for pid in mids if int(pid) != int(eid)}
-        self.latent_dim = int(latent_dim)
+
+        self.latent_dim_params = int(latent_dim_params)
+        self.latent_dim_audio = int(latent_dim_audio)
+        self.latent_dim_total = int(latent_dim_total)
+
         self.beta = float(beta)
         self.latent_dropout_rate = float(latent_dropout_rate)
 
@@ -728,15 +752,14 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         self.audio_loss_tracker = tf.keras.metrics.Mean(name="audio_loss")
 
     def call(self, inputs, training=False):
-        # inputs expected: [text, params, audio]
         text_embeddings, params_in, audio_in = inputs
-        z_mean, z_log_var = self.encoder([text_embeddings, params_in, audio_in])
-        eps = tf.random.normal(shape=tf.shape(z_mean))
-        z = z_mean + tf.exp(0.5 * z_log_var) * eps
-        return self.decoder([z, text_embeddings], training=training)
+        zp_mu, zp_log, za_mu, za_log = self.encoder([text_embeddings, params_in, audio_in])
+        zp = zp_mu + tf.exp(0.5 * zp_log) * tf.random.normal(shape=tf.shape(zp_mu))
+        za = za_mu + tf.exp(0.5 * za_log) * tf.random.normal(shape=tf.shape(za_mu))
+        z_combined = tf.concat([zp, za], axis=-1)
+        return self.decoder([z_combined, text_embeddings], training=training)
 
     def _group_mask_matrix(self, head_indices, y_true):
-        # Standard knob masking based on "Switch On/Off"
         batch_size = tf.shape(y_true)[0]
         mask_cols = []
         for pid in head_indices:
@@ -747,12 +770,12 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
                 mask_cols.append(tf.cast(enable_val > 0.5, tf.float32))
         return tf.concat(mask_cols, axis=1) if len(mask_cols) > 1 else mask_cols[0]
 
-    def calculate_loss(self, y_true_params, y_true_audio, y_true_mask, y_pred_list, z_mean, z_log_var):
+    def calculate_loss(self, y_true_params, y_true_audio, y_true_mask, y_pred_list,
+                       zp_mu, zp_log, za_mu, za_log):
         eps = 1e-7
         head_idx = 0
         uni_loss, mod_loss, bool_loss, cat_loss, audio_loss = 0.0, 0.0, 0.0, 0.0, 0.0
 
-        # --- 1. PARAMETER RECONSTRUCTION ---
         if self.unipolar_indices:
             y_true_uni = tf.gather(y_true_params, self.unipolar_indices, axis=1)
             mask = self._group_mask_matrix(self.unipolar_indices, y_true_params)
@@ -764,8 +787,9 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
             y_true_bi_raw = tf.gather(y_true_params, self.bipolar_indices, axis=1)
             pred_gate, pred_val = y_pred_list[head_idx], y_pred_list[head_idx+1]
             head_idx += 2
-            minv, maxv = tf.reduce_min(y_true_bi_raw), tf.reduce_max(y_true_bi_raw)
-            y_true_bi = tf.cond(tf.logical_and(minv>=0, maxv<=1.0001), lambda: y_true_bi_raw*2-1, lambda: y_true_bi_raw)
+            # REPLACED LAMBDA with tf.where for robustness
+            is_normalized = tf.logical_and(tf.reduce_min(y_true_bi_raw) >= 0, tf.reduce_max(y_true_bi_raw) <= 1.0001)
+            y_true_bi = tf.where(is_normalized, y_true_bi_raw * 2 - 1, y_true_bi_raw)
             true_gate = tf.cast(tf.abs(y_true_bi) > 0.01, tf.float32)
             gate_loss = tf.reduce_mean(tf.reduce_sum(sigmoid_focal_crossentropy(true_gate, pred_gate), axis=-1))
             val_loss = tf.reduce_mean(tf.reduce_sum(tf.square(y_true_bi - pred_val) * true_gate, axis=-1) / (tf.reduce_sum(true_gate, axis=-1)+eps))
@@ -780,98 +804,65 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
 
         for j in sorted(self.cat_indices):
             y_true_cat = tf.squeeze(tf.gather(y_true_params, [j], axis=1), -1)
-            y_pred_cat = y_pred_list[head_idx]
             mask = tf.squeeze(self._group_mask_matrix([j], y_true_params), -1)
             C = self.categorical_num_classes[int(j)]
             labels = tf.cast(tf.where(y_true_cat <= 1.0001, tf.round(y_true_cat*(C-1)), tf.round(y_true_cat)), tf.int32)
             labels = tf.clip_by_value(labels, 0, C-1)
-            c_loss = tf.keras.losses.sparse_categorical_crossentropy(labels, y_pred_cat)
+            c_loss = tf.keras.losses.sparse_categorical_crossentropy(labels, y_pred_list[head_idx])
             cat_loss += tf.reduce_mean(c_loss * mask) * W_CAT
             head_idx += 1
 
-        # --- 2. AUDIO EMBEDDING RECONSTRUCTION ---
-        # Reshape Audio Ground Truth to (Batch, 3, 512)
         true_audio_3d = tf.reshape(y_true_audio, [-1, 3, 512])
-
-        # A. Osc A (Index 0)
-        pred_osc_a = y_pred_list[head_idx] # (Batch, 512)
-        true_osc_a = true_audio_3d[:, 0, :]
-        mask_osc_a = tf.expand_dims(y_true_mask[:, 0], -1) # (Batch, 1)
-        loss_a = tf.reduce_sum(tf.square(true_osc_a - pred_osc_a) * mask_osc_a) / (tf.reduce_sum(mask_osc_a) * 512 + eps)
-        head_idx += 1
-
-        # B. Osc B (Index 1)
-        pred_osc_b = y_pred_list[head_idx]
-        true_osc_b = true_audio_3d[:, 1, :]
-        mask_osc_b = tf.expand_dims(y_true_mask[:, 1], -1)
-        loss_b = tf.reduce_sum(tf.square(true_osc_b - pred_osc_b) * mask_osc_b) / (tf.reduce_sum(mask_osc_b) * 512 + eps)
-        head_idx += 1
-
-        # C. Noise (Index 2)
-        pred_osc_n = y_pred_list[head_idx]
-        true_osc_n = true_audio_3d[:, 2, :]
-        mask_osc_n = tf.expand_dims(y_true_mask[:, 2], -1)
-        loss_n = tf.reduce_sum(tf.square(true_osc_n - pred_osc_n) * mask_osc_n) / (tf.reduce_sum(mask_osc_n) * 512 + eps)
-        head_idx += 1
-
+        loss_a = tf.reduce_sum(tf.square(true_audio_3d[:,0,:] - y_pred_list[head_idx]) * tf.expand_dims(y_true_mask[:,0], -1)) / (tf.reduce_sum(y_true_mask[:,0]) * 512 + eps)
+        loss_b = tf.reduce_sum(tf.square(true_audio_3d[:,1,:] - y_pred_list[head_idx+1]) * tf.expand_dims(y_true_mask[:,1], -1)) / (tf.reduce_sum(y_true_mask[:,1]) * 512 + eps)
+        loss_n = tf.reduce_sum(tf.square(true_audio_3d[:,2,:] - y_pred_list[head_idx+2]) * tf.expand_dims(y_true_mask[:,2], -1)) / (tf.reduce_sum(y_true_mask[:,2]) * 512 + eps)
         audio_loss = (loss_a + loss_b + loss_n) * W_AUDIO
 
-        # --- 3. TOTAL LOSS ---
         recon_loss = uni_loss + mod_loss + bool_loss + cat_loss + audio_loss
-        kl_loss = -0.5 * tf.reduce_mean(tf.reduce_sum(1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var), axis=1))
-        total_loss = recon_loss + (self.beta * kl_loss)
+        kl_p = -0.5 * tf.reduce_mean(tf.reduce_sum(1 + zp_log - tf.square(zp_mu) - tf.exp(zp_log), axis=1))
+        kl_a = -0.5 * tf.reduce_mean(tf.reduce_sum(1 + za_log - tf.square(za_mu) - tf.exp(za_log), axis=1))
+        total_loss = recon_loss + (self.beta * (kl_p + kl_a))
 
-        return total_loss, recon_loss, kl_loss, audio_loss
+        return total_loss, recon_loss, (kl_p + kl_a), audio_loss
 
     def train_step(self, data):
         inputs = data[0]
         text, params, audio, mask = inputs[0], inputs[1], inputs[2], inputs[3]
-
         with tf.GradientTape() as tape:
-            z_mean, z_log_var = self.encoder([text, params, audio])
-            eps = tf.random.normal(shape=tf.shape(z_mean))
-            z = z_mean + tf.exp(0.5 * z_log_var) * eps
-            dropout_mask = tf.cast(tf.random.uniform((tf.shape(z)[0], 1)) >= self.latent_dropout_rate, tf.float32)
-            z_dec = z * dropout_mask
-            y_pred = self.decoder([z_dec, text], training=True)
-            total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, z_mean, z_log_var)
-
+            zp_mu, zp_log, za_mu, za_log = self.encoder([text, params, audio])
+            zp = zp_mu + tf.exp(0.5 * zp_log) * tf.random.normal(shape=tf.shape(zp_mu))
+            za = za_mu + tf.exp(0.5 * za_log) * tf.random.normal(shape=tf.shape(za_mu))
+            z_combined = tf.concat([zp, za], axis=-1)
+            dropout_mask = tf.cast(tf.random.uniform((tf.shape(z_combined)[0], 1)) >= self.latent_dropout_rate, tf.float32)
+            y_pred = self.decoder([z_combined * dropout_mask, text], training=True)
+            total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, zp_mu, zp_log, za_mu, za_log)
         grads = tape.gradient(total, self.trainable_variables)
         self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
-        self.total_loss_tracker.update_state(total)
-        self.reconstruction_loss_tracker.update_state(recon)
-        self.kl_loss_tracker.update_state(kl)
-        self.audio_loss_tracker.update_state(aud)
+        self.total_loss_tracker.update_state(total); self.reconstruction_loss_tracker.update_state(recon)
+        self.kl_loss_tracker.update_state(kl); self.audio_loss_tracker.update_state(aud)
         return {"loss": self.total_loss_tracker.result(), "recon": recon, "kl": kl, "audio": aud}
 
     def test_step(self, data):
         inputs = data[0]
         text, params, audio, mask = inputs[0], inputs[1], inputs[2], inputs[3]
-        z_mean, z_log_var = self.encoder([text, params, audio])
-        eps = tf.random.normal(shape=tf.shape(z_mean))
-        z = z_mean + tf.exp(0.5 * z_log_var) * eps
-        y_pred = self.decoder([z, text], training=False)
-        total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, z_mean, z_log_var)
-        self.total_loss_tracker.update_state(total)
-        self.reconstruction_loss_tracker.update_state(recon)
-        self.kl_loss_tracker.update_state(kl)
-        self.audio_loss_tracker.update_state(aud)
+        zp_mu, zp_log, za_mu, za_log = self.encoder([text, params, audio])
+        zp = zp_mu + tf.exp(0.5 * zp_log) * tf.random.normal(shape=tf.shape(zp_mu))
+        za = za_mu + tf.exp(0.5 * za_log) * tf.random.normal(shape=tf.shape(za_mu))
+        y_pred = self.decoder([tf.concat([zp, za], axis=-1), text], training=False)
+        total, recon, kl, aud = self.calculate_loss(params, audio, mask, y_pred, zp_mu, zp_log, za_mu, za_log)
+        self.total_loss_tracker.update_state(total); self.reconstruction_loss_tracker.update_state(recon)
+        self.kl_loss_tracker.update_state(kl); self.audio_loss_tracker.update_state(aud)
         return {"loss": self.total_loss_tracker.result(), "recon": recon, "kl": kl, "audio": aud}
 
     def get_config(self):
         config = super().get_config()
         config.update({
-            "encoder": serialize_keras_object(self.encoder),
-            "decoder": serialize_keras_object(self.decoder),
-            "unipolar_indices": self.unipolar_indices,
-            "bipolar_indices": self.bipolar_indices,
-            "bool_indices": self.bool_indices,
-            "cat_indices": self.cat_indices,
-            "categorical_num_classes": self.categorical_num_classes,
-            "group_masking_map": self.group_masking_map,
-            "latent_dim": self.latent_dim,
-            "beta": self.beta,
-            "latent_dropout_rate": self.latent_dropout_rate
+            "encoder": serialize_keras_object(self.encoder), "decoder": serialize_keras_object(self.decoder),
+            "unipolar_indices": self.unipolar_indices, "bipolar_indices": self.bipolar_indices,
+            "bool_indices": self.bool_indices, "cat_indices": self.cat_indices,
+            "categorical_num_classes": self.categorical_num_classes, "group_masking_map": self.group_masking_map,
+            "latent_dim_params": self.latent_dim_params, "latent_dim_audio": self.latent_dim_audio,
+            "latent_dim_total": self.latent_dim_total, "beta": self.beta, "latent_dropout_rate": self.latent_dropout_rate
         })
         return config
 
@@ -881,254 +872,37 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         decoder = deserialize_keras_object(config.pop("decoder"))
         return cls(encoder, decoder, **config)
 
-
-# ==============================================================================
-# 3. DIFFUSION COMPONENTS (Stage 2: Denoising)
-# ==============================================================================
-
-@register_keras_serializable(package="custom", name="SinusoidalTimeEmbedding")
-class SinusoidalTimeEmbedding(Layer):
-    def __init__(self, dim, **kwargs):
-        super().__init__(**kwargs)
-        self.dim = dim
-    def call(self, time):
-        half_dim = self.dim // 2
-        embeddings = tf.math.log(10000.0) / (half_dim - 1)
-        embeddings = tf.exp(tf.range(half_dim, dtype=tf.float32) * -embeddings)
-        embeddings = tf.cast(time, tf.float32) * embeddings[None, :]
-        embeddings = tf.concat([tf.sin(embeddings), tf.cos(embeddings)], axis=-1)
-        return embeddings
-    def get_config(self):
-        config = super().get_config()
-        config.update({"dim": self.dim})
-        return config
-
-@register_keras_serializable(package="custom", name="FiLM_Modulate")
-class FiLM_Modulate(Layer):
-    def call(self, inputs):
-        x, gammas, betas = inputs
-        return (x * (1.0 + gammas)) + betas
-
-@register_keras_serializable(package="custom", name="ResidualBlock")
-class ResidualBlock(Layer):
-    def __init__(self, width, dropout=0.1, **kwargs):
-        super().__init__(**kwargs)
-        self.width = width
-        self.dropout_rate = dropout
-        self.norm1 = LayerNormalization()
-        self.dense1 = Dense(width, activation="swish")
-        self.drop1 = Dropout(dropout)
-        self.norm2 = LayerNormalization()
-        self.dense2 = Dense(width, activation="swish")
-        self.drop2 = Dropout(dropout)
-        self.film_proj = Dense(width * 4, activation=None)
-    def call(self, x, conditions):
-        residual = x
-        film_params = self.film_proj(conditions)
-        gam1, bet1, gam2, bet2 = tf.split(film_params, num_or_size_splits=4, axis=-1)
-        x = self.norm1(x)
-        x = FiLM_Modulate()([x, gam1, bet1])
-        x = self.dense1(x)
-        x = self.drop1(x)
-        x = self.norm2(x)
-        x = FiLM_Modulate()([x, gam2, bet2])
-        x = self.dense2(x)
-        x = self.drop2(x)
-        return Add()([residual, x])
-    def get_config(self):
-        config = super().get_config()
-        config.update({"width": self.width, "dropout": self.dropout_rate})
-        return config
-
-class DiffusionScheduler:
-    def __init__(self, timesteps=1000, beta_start=0.0001, beta_end=0.02):
-        self.timesteps = timesteps
-        self.betas = tf.linspace(beta_start, beta_end, timesteps)
-        self.alphas = 1.0 - self.betas
-        self.alphas_cumprod = tf.math.cumprod(self.alphas)
-        self.sqrt_alphas_cumprod = tf.sqrt(self.alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = tf.sqrt(1.0 - self.alphas_cumprod)
-    def add_noise(self, original_samples, noise, timesteps):
-        sqrt_alpha_prod = tf.gather(self.sqrt_alphas_cumprod, timesteps)
-        sqrt_one_minus_alpha_prod = tf.gather(self.sqrt_one_minus_alphas_cumprod, timesteps)
-        sqrt_alpha_prod = tf.reshape(sqrt_alpha_prod, [-1, 1])
-        sqrt_one_minus_alpha_prod = tf.reshape(sqrt_one_minus_alpha_prod, [-1, 1])
-        return sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
-
-@register_keras_serializable(package="custom", name="LatentDiffusionModel")
-class LatentDiffusionModel(tf.keras.Model):
-    def __init__(self, vae_encoder, vae_decoder, denoiser, timesteps=1000, **kwargs):
-        super().__init__(**kwargs)
-        self.vae_encoder = vae_encoder
-        self.vae_decoder = vae_decoder
-        self.denoiser = denoiser
-        self.timesteps = int(timesteps)
-        self.scheduler = DiffusionScheduler(timesteps=self.timesteps)
-        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
-
-    def call(self, inputs, training=False):
-        return self.denoiser(inputs, training=training)
-
-    def train_step(self, data):
-        # inputs: [text, params, audio, mask]
-        inputs = data[0]
-        text, params, audio = inputs[0], inputs[1], inputs[2]
-        batch_size = tf.shape(params)[0]
-        # 1. Encode with Frozen VAE (Need to pass ALL inputs now)
-        z_mean, z_log_var = self.vae_encoder([text, params, audio], training=False)
-        epsilon = tf.random.normal(shape=tf.shape(z_mean))
-        z_0 = z_mean + tf.exp(0.5 * z_log_var) * epsilon
-        # 2. Add Noise
-        t = tf.random.uniform(minval=0, maxval=self.timesteps, shape=(batch_size,), dtype=tf.int32)
-        noise = tf.random.normal(shape=tf.shape(z_0))
-        z_t = self.scheduler.add_noise(z_0, noise, t)
-        # 3. Train Denoiser
-        with tf.GradientTape() as tape:
-            pred_noise = self.denoiser([z_t, t, text], training=True)
-            loss = tf.reduce_mean(tf.square(noise - pred_noise))
-        gradients = tape.gradient(loss, self.denoiser.trainable_variables)
-        self.optimizer.apply_gradients(zip(gradients, self.denoiser.trainable_variables))
-        self.loss_tracker.update_state(loss)
-        return {"loss": self.loss_tracker.result()}
-
-    def test_step(self, data):
-        inputs = data[0]
-        text, params, audio = inputs[0], inputs[1], inputs[2]
-        batch_size = tf.shape(params)[0]
-        z_mean, z_log_var = self.vae_encoder([text, params, audio], training=False)
-        epsilon = tf.random.normal(shape=tf.shape(z_mean))
-        z_0 = z_mean + tf.exp(0.5 * z_log_var) * epsilon
-        t = tf.random.uniform(minval=0, maxval=self.timesteps, shape=(batch_size,), dtype=tf.int32)
-        noise = tf.random.normal(shape=tf.shape(z_0))
-        z_t = self.scheduler.add_noise(z_0, noise, t)
-        pred_noise = self.denoiser([z_t, t, text], training=False)
-        loss = tf.reduce_mean(tf.square(noise - pred_noise))
-        self.loss_tracker.update_state(loss)
-        return {"loss": self.loss_tracker.result()}
-
-    def generate(self, text_embeds, steps=50):
-        text_embeds = tf.convert_to_tensor(text_embeds, dtype=tf.float32)
-        batch_size = tf.shape(text_embeds)[0]
-        latent_dim = self.vae_encoder.output_shape[0][1]
-        z = tf.random.normal(shape=(batch_size, latent_dim))
-        for i in reversed(range(0, self.timesteps)):
-            t = tf.ones((batch_size,), dtype=tf.int32) * i
-            pred_noise = self.denoiser([z, t, text_embeds], training=False)
-            alpha = tf.gather(self.scheduler.alphas, i)
-            alpha_cumprod = tf.gather(self.scheduler.alphas_cumprod, i)
-            beta = tf.gather(self.scheduler.betas, i)
-            sqrt_one_minus_alpha_cumprod = tf.sqrt(1.0 - alpha_cumprod)
-            model_mean = (1 / tf.sqrt(alpha)) * (z - ((1 - alpha) / (sqrt_one_minus_alpha_cumprod)) * pred_noise)
-            if i > 0:
-                noise = tf.random.normal(shape=tf.shape(z))
-                sigma = tf.sqrt(beta)
-                z = model_mean + sigma * noise
-            else:
-                z = model_mean
-        decoded = self.vae_decoder([z, text_embeds], training=False)
-        return decoded
-
-    def get_config(self):
-        config = super().get_config()
-        config.update({
-            "vae_encoder": serialize_keras_object(self.vae_encoder),
-            "vae_decoder": serialize_keras_object(self.vae_decoder),
-            "denoiser": serialize_keras_object(self.denoiser),
-            "timesteps": self.timesteps
-        })
-        return config
-
-    @classmethod
-    def from_config(cls, config):
-        vae_encoder = deserialize_keras_object(config.pop("vae_encoder"))
-        vae_decoder = deserialize_keras_object(config.pop("vae_decoder"))
-        denoiser = deserialize_keras_object(config.pop("denoiser"))
-        return cls(vae_encoder, vae_decoder, denoiser, **config)
-
-def build_encoder(embedding_dim, num_params, audio_dim, latent_dim, enc_width, dropout_rate=0.0):
-    text_in = Input(shape=(embedding_dim,), name="encoder_text_input")
-    params_in = Input(shape=(num_params,), name="encoder_params_input")
-    audio_in = Input(shape=(audio_dim,), name="encoder_audio_input")
-    x = Concatenate(name="encoder_concat")([text_in, params_in, audio_in])
-    x = Dense(enc_width, activation="linear")(x)
-    x = LayerNormalization()(x)
-    x = Activation("relu")(x)
-    x = Dense(enc_width, activation="linear")(x)
-    x = LayerNormalization()(x)
-    x = Activation("relu")(x)
-    z_mu = Dense(latent_dim, name="z_mean")(x)
-    z_log = Dense(latent_dim, name="z_log_var")(x)
-    return Model([text_in, params_in, audio_in], [z_mu, z_log], name="encoder")
-
-def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, bipolar_indices,
-                       bool_indices, cat_indices, categorical_num_classes, dropout_rate=0.0):
-    z_in = Input(shape=(latent_dim,), name="latent_input")
-    text_in = Input(shape=(embedding_dim,), name="decoder_text_input")
-    def film_block(x, text_in, width, block_id):
-        x = LayerNormalization(name=f"dec_ln_pre_{block_id}")(x)
-        gamma = Dense(width, kernel_initializer="zeros", bias_initializer="ones")(text_in)
-        beta = Dense(width, kernel_initializer="zeros", bias_initializer="zeros")(text_in)
-        x = FiLMLayer(name=f"film_{block_id}")([x, gamma, beta])
-        x = LeakyReLU(alpha=0.2)(x)
-        return x
-    x = Dense(dec_width)(z_in)
-    x = film_block(x, text_in, dec_width, 1)
-    x = Dense(dec_width)(x)
-    x = film_block(x, text_in, dec_width, 2)
-    x = Dense(dec_width)(x)
-    x = LayerNormalization()(x)
-    x = Activation("relu")(x)
-    outs = []
-    if unipolar_indices:
-        outs.append(Dense(len(unipolar_indices), activation="sigmoid", name="unipolar_outputs")(x))
-    if bipolar_indices:
-        outs.append(Dense(len(bipolar_indices), activation="linear", name="bipolar_gate")(x))
-        outs.append(Dense(len(bipolar_indices), activation="tanh", name="bipolar_value")(x))
-    if bool_indices:
-        outs.append(Dense(len(bool_indices), activation="sigmoid", name="boolean_outputs")(x))
-    for j in sorted(cat_indices):
-        outs.append(Dense(categorical_num_classes[int(j)], activation="softmax", name=f"cat_{j}")(x))
-    # NEW: Audio Embeddings
-    outs.append(Dense(512, activation="linear", name="osc_a_embed")(x))
-    outs.append(Dense(512, activation="linear", name="osc_b_embed")(x))
-    outs.append(Dense(512, activation="linear", name="osc_n_embed")(x))
-    return Model([z_in, text_in], outs, name="decoder_film")
-
-def build_resmlp_denoiser(latent_dim=128, text_embed_dim=512, hidden_dim=512, num_layers=8):
-    z_noisy = Input(shape=(latent_dim,), name="z_noisy")
-    t_in = Input(shape=(1,), name="time_input")
-    text_emb = Input(shape=(text_embed_dim,), name="text_embedding")
-    t_emb = SinusoidalTimeEmbedding(dim=hidden_dim)(t_in)
-    t_emb = Dense(hidden_dim, activation="swish")(t_emb)
-    x = Dense(hidden_dim)(z_noisy)
-    cond_concat = Concatenate()([t_emb, text_emb])
-    cond_mapped = Dense(hidden_dim, activation="swish")(cond_concat)
-    cond_mapped = Dense(hidden_dim, activation="swish")(cond_mapped)
-    for i in range(num_layers):
-        x = ResidualBlock(width=hidden_dim, name=f"res_block_{i}")(x, cond_mapped)
-    x = LayerNormalization()(x)
-    noise_pred = Dense(latent_dim, activation="linear", name="noise_pred")(x)
-    return Model(inputs=[z_noisy, t_in, text_emb], outputs=noise_pred, name="resmlp_denoiser")
-
 """## Define Model Builders"""
 
 # Cell 3.3 — Model Builders
 
-def build_encoder(embedding_dim, num_params, audio_dim, latent_dim, enc_width, dropout_rate=0.0):
+@register_keras_serializable(package="custom", name="SplitLatentLayer")
+class SplitLatentLayer(Layer):
     """
-    Builds q(z | params, audio, text)
-    Inputs:
-      - text: 512 dim
-      - params: 202 dim (Knobs)
-      - audio: 1536 dim (3 * 512 for OscA, OscB, Noise)
+    A Custom Layer to split a concatenated latent vector into two parts.
+    Replaces Lambda(lambda x: x[:, :split]) for better serialization.
     """
+    def __init__(self, split_index, part="first", **kwargs):
+        super().__init__(**kwargs)
+        self.split_index = split_index
+        self.part = part
+
+    def call(self, inputs):
+        if self.part == "first":
+            return inputs[:, :self.split_index]
+        return inputs[:, self.split_index:]
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"split_index": self.split_index, "part": self.part})
+        return config
+
+def build_encoder(embedding_dim, num_params, audio_dim, latent_dim_params, latent_dim_audio, enc_width, dropout_rate=0.0):
     text_in = Input(shape=(embedding_dim,), name="encoder_text_input")
     params_in = Input(shape=(num_params,), name="encoder_params_input")
     audio_in = Input(shape=(audio_dim,), name="encoder_audio_input")
 
-    # Concatenate ALL modalities to form the full context
     x = Concatenate(name="encoder_concat")([text_in, params_in, audio_in])
-
     x = Dense(enc_width, activation="linear")(x)
     x = LayerNormalization()(x)
     x = Activation("relu")(x)
@@ -1136,91 +910,78 @@ def build_encoder(embedding_dim, num_params, audio_dim, latent_dim, enc_width, d
     x = LayerNormalization()(x)
     x = Activation("relu")(x)
 
-    z_mu = Dense(latent_dim, name="z_mean")(x)
-    z_log = Dense(latent_dim, name="z_log_var")(x)
+    # HEAD 1: PARAMETERS
+    x_p = Dense(enc_width // 2, activation="relu", name="pre_latent_params")(x)
+    zp_mu = Dense(latent_dim_params, name="zp_mean")(x_p)
+    zp_log = Dense(latent_dim_params, name="zp_log_var")(x_p)
 
-    return Model([text_in, params_in, audio_in], [z_mu, z_log], name="encoder")
+    # HEAD 2: AUDIO
+    x_a = Dense(enc_width // 2, activation="relu", name="pre_latent_audio")(x)
+    za_mu = Dense(latent_dim_audio, name="za_mean")(x_a)
+    za_log = Dense(latent_dim_audio, name="za_log_var")(x_a)
 
-def build_decoder_film(embedding_dim, latent_dim, dec_width, unipolar_indices, bipolar_indices,
-                       bool_indices, cat_indices, categorical_num_classes, dropout_rate=0.0):
-    """
-    Builds p(params, audio | z, text)
-    IMPLEMENTS STOP GRADIENT:
-      - Path A (Knobs): Gradients flow to Z.
-      - Path B (Audio): Gradients blocked at Z.
-    """
-    z_in = Input(shape=(latent_dim,), name="latent_input")
+    return Model([text_in, params_in, audio_in], [zp_mu, zp_log, za_mu, za_log], name="encoder")
+
+def build_decoder_film(embedding_dim, latent_dim_total, latent_dim_params, dec_width,
+                       unipolar_indices, bipolar_indices, bool_indices, cat_indices, categorical_num_classes, dropout_rate=0.0):
+    z_in = Input(shape=(latent_dim_total,), name="latent_input")
     text_in = Input(shape=(embedding_dim,), name="decoder_text_input")
 
-    # FiLM Conditioning Block
+    # REPLACED LAMBDA with Custom SplitLatentLayer
+    z_p = SplitLatentLayer(split_index=latent_dim_params, part="first", name="slice_params")(z_in)
+    z_a = SplitLatentLayer(split_index=latent_dim_params, part="second", name="slice_audio")(z_in)
+
     def film_block(x, text_in, width, block_id):
         x = LayerNormalization(name=f"dec_ln_pre_{block_id}")(x)
         gamma = Dense(width, kernel_initializer="zeros", bias_initializer="ones")(text_in)
         beta = Dense(width, kernel_initializer="zeros", bias_initializer="zeros")(text_in)
         x = FiLMLayer(name=f"film_{block_id}")([x, gamma, beta])
-        x = LeakyReLU(alpha=0.2)(x)
+        x = LeakyReLU(negative_slope=0.2)(x)
         return x
 
-    # --- PATH A: MAIN PARAMETER PATH (Gradients Flow) ---
-    x = Dense(dec_width)(z_in)
-    x = film_block(x, text_in, dec_width, 1)
+    # PATH A: PARAMETERS (Uses z_p)
+    x = Dense(dec_width)(z_p)
+    x = film_block(x, text_in, dec_width, "params_1")
     x = Dense(dec_width)(x)
-    x = film_block(x, text_in, dec_width, 2)
-    x = Dense(dec_width)(x)
+    x = film_block(x, text_in, dec_width, "params_2")
     x = LayerNormalization()(x)
     x = Activation("relu")(x)
 
     outs = []
-
-    # 1. Parameter Heads (Attached to Path A)
-    if unipolar_indices:
-        outs.append(Dense(len(unipolar_indices), activation="sigmoid", name="unipolar_outputs")(x))
+    if unipolar_indices: outs.append(Dense(len(unipolar_indices), activation="sigmoid", name="unipolar_outputs")(x))
     if bipolar_indices:
         outs.append(Dense(len(bipolar_indices), activation="linear", name="bipolar_gate")(x))
         outs.append(Dense(len(bipolar_indices), activation="tanh", name="bipolar_value")(x))
-    if bool_indices:
-        outs.append(Dense(len(bool_indices), activation="sigmoid", name="boolean_outputs")(x))
-    for j in sorted(cat_indices):
-        outs.append(Dense(categorical_num_classes[int(j)], activation="softmax", name=f"cat_{j}")(x))
+    if bool_indices: outs.append(Dense(len(bool_indices), activation="sigmoid", name="boolean_outputs")(x))
+    for j in sorted(cat_indices): outs.append(Dense(categorical_num_classes[int(j)], activation="softmax", name=f"cat_{j}")(x))
 
-    # --- PATH B: AUDIO SIDECAR PATH (Gradients Blocked) ---
-    # FIX: Use a Lambda layer with explicit output_shape to wrap the TensorFlow op so Keras can track it
-    z_safe = tf.keras.layers.Lambda(lambda x: tf.stop_gradient(x), output_shape=lambda s: s, name="audio_stop_grad")(z_in)
-
-    # We give the audio sidecar its own small dense network to map Z->Audio
-    x_aud = Dense(dec_width)(z_safe)
-    x_aud = film_block(x_aud, text_in, dec_width, "audio_sidecar") # Condition on text again
+    # PATH B: AUDIO (Uses z_a)
+    x_aud = Dense(dec_width)(z_a)
+    x_aud = film_block(x_aud, text_in, dec_width, "audio_1")
+    x_aud = Dense(dec_width)(x_aud)
+    x_aud = film_block(x_aud, text_in, dec_width, "audio_2")
     x_aud = LayerNormalization()(x_aud)
     x_aud = Activation("relu")(x_aud)
 
-    # 2. Audio Embedding Heads (Attached to Path B)
     outs.append(Dense(512, activation="linear", name="osc_a_embed")(x_aud))
     outs.append(Dense(512, activation="linear", name="osc_b_embed")(x_aud))
     outs.append(Dense(512, activation="linear", name="osc_n_embed")(x_aud))
 
     return Model([z_in, text_in], outs, name="decoder_film")
 
-# Denoiser (Latent Diffusion)
-def build_resmlp_denoiser(latent_dim=128, text_embed_dim=512, hidden_dim=512, num_layers=8):
+def build_resmlp_denoiser(latent_dim, text_embed_dim=512, hidden_dim=512, num_layers=8):
     z_noisy = Input(shape=(latent_dim,), name="z_noisy")
     t_in = Input(shape=(1,), name="time_input")
     text_emb = Input(shape=(text_embed_dim,), name="text_embedding")
-
     t_emb = SinusoidalTimeEmbedding(dim=hidden_dim)(t_in)
     t_emb = Dense(hidden_dim, activation="swish")(t_emb)
-
     x = Dense(hidden_dim)(z_noisy)
-
     cond_concat = Concatenate()([t_emb, text_emb])
     cond_mapped = Dense(hidden_dim, activation="swish")(cond_concat)
     cond_mapped = Dense(hidden_dim, activation="swish")(cond_mapped)
-
-    for i in range(num_layers):
-        x = ResidualBlock(width=hidden_dim, name=f"res_block_{i}")(x, cond_mapped)
-
+    for i in range(num_layers): x = ResidualBlock(width=hidden_dim, name=f"res_block_{i}")(x, cond_mapped)
     x = LayerNormalization()(x)
     noise_pred = Dense(latent_dim, activation="linear", name="noise_pred")(x)
-
     return Model(inputs=[z_noisy, t_in, text_emb], outputs=noise_pred, name="resmlp_denoiser")
 
 """## Compile and Train"""
@@ -1248,10 +1009,13 @@ safe_cat = filter_indices(categorical_param_indices, actual_num_params)
 safe_classes = {k: v for k, v in categorical_num_classes.items() if k < actual_num_params}
 
 # --- 2. DEFINE THE GRID SEARCH ---
-# NOTE: With Stop Gradient, we can use higher W_AUDIO without hurting knobs.
+# HYPOTHESIS:
+# Params need 128 dims to look good (based on previous run).
+# Audio needs its OWN space so it doesn't crush params.
+
 SEARCH_GRID = [
-    {"latent_dim": 128, "w_audio": 1.0},
-    # {"latent_dim": 256, "w_audio": 1.0},
+    {"latent_p": 128, "latent_a": 128, "w_audio": 1.0}, # Balanced Split
+    # {"latent_p": 128, "latent_a": 64, "w_audio": 1.0},  # Compress Audio more
 ]
 
 results = []
@@ -1261,10 +1025,12 @@ best_config = None
 print(f"⚔️ STARTING HYPERPARAMETER BATTLE: {len(SEARCH_GRID)} Candidates\n")
 
 for i, config in enumerate(SEARCH_GRID):
-    l_dim = config["latent_dim"]
+    l_p = config["latent_p"]
+    l_a = config["latent_a"]
     w_aud = config["w_audio"]
+    l_total = l_p + l_a
 
-    print(f"--- Round {i+1}: Latent Dim={l_dim}, Audio Weight={w_aud} ---")
+    print(f"--- Round {i+1}: Latent Params={l_p}, Latent Audio={l_a} (Total {l_total}) ---")
 
     # 1. Update Global Hyperparameter
     global W_AUDIO
@@ -1273,17 +1039,27 @@ for i, config in enumerate(SEARCH_GRID):
     # 2. Build Fresh Model
     tf.keras.backend.clear_session()
 
-    enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim, l_dim, 256)
-    dec = build_decoder_film(X_train_text.shape[1], l_dim, 512,
-                             safe_unipolar, safe_bipolar, safe_bool,
-                             safe_cat, safe_classes)
+    # Pass SPLIT dimensions to Encoder
+    enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim,
+                        latent_dim_params=l_p, latent_dim_audio=l_a,
+                        enc_width=512) # Wider encoder to handle branching
+
+    # Pass SPLIT dimensions to Decoder
+    dec = build_decoder_film(X_train_text.shape[1],
+                             latent_dim_total=l_total,
+                             latent_dim_params=l_p,
+                             dec_width=512,
+                             unipolar_indices=safe_unipolar, bipolar_indices=safe_bipolar,
+                             bool_indices=safe_bool, cat_indices=safe_cat,
+                             categorical_num_classes=safe_classes)
 
     vae = VAE_Text_to_Synth_Audio(
         encoder=enc, decoder=dec,
         unipolar_indices=safe_unipolar, bipolar_indices=safe_bipolar,
         bool_indices=safe_bool, cat_indices=safe_cat,
         categorical_num_classes=safe_classes, group_masking_map=GROUP_MASKING_MAP,
-        latent_dim=l_dim, beta=1.0, latent_dropout_rate=0.1
+        latent_dim_params=l_p, latent_dim_audio=l_a, latent_dim_total=l_total,
+        beta=1.0, latent_dropout_rate=0.0
     )
 
     vae.compile(optimizer=Adam(learning_rate=1e-3))
@@ -1305,7 +1081,7 @@ for i, config in enumerate(SEARCH_GRID):
     print(f"   Result -> Total Val Loss: {final_val_loss:.4f} | Recon (Knobs): {final_recon:.4f} | Audio: {final_audio_loss:.4f}")
 
     results.append({
-        "latent_dim": l_dim,
+        "latent_p": l_p, "latent_a": l_a,
         "w_audio": w_aud,
         "val_loss": final_val_loss,
         "val_recon": final_recon,
@@ -1321,18 +1097,18 @@ print("\n🏆 BATTLE RESULTS 🏆")
 df_res = pd.DataFrame(results).sort_values("val_loss")
 print(df_res)
 
-print(f"\n✅ WINNER: Latent Dim = {best_config['latent_dim']}, W_AUDIO = {best_config['w_audio']}")
-
 # --- 4. RETRAIN WINNER (Full Training) ---
 print(f"\n🚀 Retraining WINNER for full 40 epochs...")
 
 W_AUDIO = best_config["w_audio"]
-latent_dim = best_config["latent_dim"]
+l_p = best_config["latent_p"]
+l_a = best_config["latent_a"]
+l_total = l_p + l_a
 
 tf.keras.backend.clear_session()
 
-enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim, latent_dim, 256)
-dec = build_decoder_film(X_train_text.shape[1], latent_dim, 512,
+enc = build_encoder(X_train_text.shape[1], actual_num_params, audio_dim, l_p, l_a, 512)
+dec = build_decoder_film(X_train_text.shape[1], l_total, l_p, 512,
                          safe_unipolar, safe_bipolar, safe_bool,
                          safe_cat, safe_classes)
 
@@ -1341,7 +1117,8 @@ vae = VAE_Text_to_Synth_Audio(
     unipolar_indices=safe_unipolar, bipolar_indices=safe_bipolar,
     bool_indices=safe_bool, cat_indices=safe_cat,
     categorical_num_classes=safe_classes, group_masking_map=GROUP_MASKING_MAP,
-    latent_dim=latent_dim, beta=1.0, latent_dropout_rate=0.1
+    latent_dim_params=l_p, latent_dim_audio=l_a, latent_dim_total=l_total,
+    beta=1.0, latent_dropout_rate=0.0
 )
 
 vae.compile(optimizer=Adam(learning_rate=1e-3))
@@ -1366,7 +1143,8 @@ vae.save(os.path.join(SAVE_DIR, "vae_stage1_tuned.keras"))
 print("\n=== STAGE 2: Training Diffusion (Generation) ===")
 vae.trainable = False
 
-denoiser = build_resmlp_denoiser(latent_dim=latent_dim, text_embed_dim=X_train_text.shape[1])
+# Note: Diffusion now learns on LATENT_TOTAL dims (e.g. 256)
+denoiser = build_resmlp_denoiser(latent_dim=l_total, text_embed_dim=X_train_text.shape[1])
 ldm = LatentDiffusionModel(vae_encoder=vae.encoder, vae_decoder=vae.decoder, denoiser=denoiser, timesteps=1000)
 
 ldm.compile(optimizer=Adam(learning_rate=1e-4))
@@ -1401,24 +1179,30 @@ print("Evaluating Diffusion Model on Validation Set...")
 for (text_batch, params_batch, audio_batch, mask_batch), _ in val_dataset:
 
     # 3. Use the internal VAE encoder
-    # CRITICAL UPDATE: The encoder now needs [text, params, audio]
-    z_mean, z_log_var = best_model.vae_encoder([text_batch, params_batch, audio_batch], training=False)
+    # ENCODER NOW RETURNS 4 VALUES (Split Architecture)
+    zp_mu, zp_log, za_mu, za_log = best_model.vae_encoder([text_batch, params_batch, audio_batch], training=False)
 
-    # 4. Sample Latent (z_0)
-    eps = tf.random.normal(shape=tf.shape(z_mean))
-    z_0 = z_mean + tf.exp(0.5 * z_log_var) * eps
+    # 4. Sample Latents independently
+    eps_p = tf.random.normal(shape=tf.shape(zp_mu))
+    zp = zp_mu + tf.exp(0.5 * zp_log) * eps_p
 
-    # 5. Diffusion Forward Process (Add Noise)
+    eps_a = tf.random.normal(shape=tf.shape(za_mu))
+    za = za_mu + tf.exp(0.5 * za_log) * eps_a
+
+    # 5. Concatenate for Diffusion
+    # Diffusion learns the joint distribution of [Params | Audio]
+    z_0 = tf.concat([zp, za], axis=-1)
+
+    # 6. Diffusion Forward Process (Add Noise)
     batch_size = tf.shape(z_0)[0]
     t = tf.random.uniform(minval=0, maxval=best_model.timesteps, shape=(batch_size,), dtype=tf.int32)
     noise = tf.random.normal(shape=tf.shape(z_0))
     z_t = best_model.scheduler.add_noise(z_0, noise, t)
 
-    # 6. Predict Noise using the Denoiser
-    # Denoiser inputs remain [z_t, t, c] (audio is implicitly in z_t via the encoder)
+    # 7. Predict Noise using the Denoiser
     pred_noise = best_model.denoiser([z_t, t, text_batch], training=False)
 
-    # 7. Calculate MSE
+    # 8. Calculate MSE
     loss = tf.reduce_mean(tf.square(noise - pred_noise))
     total_mse_agg.update_state(loss)
 
@@ -1728,9 +1512,7 @@ import seaborn as sns
 def get_param_index(target_name, serum_parameters):
     """
     Finds the array index of a parameter by name.
-    Since SERUM_PARAMETERS is now clean (0-201), we can just lookup directly.
     """
-    # Iterate through all groups
     for group_name, params in serum_parameters.items():
         for p in params:
             if p['name'] == target_name:
@@ -1743,12 +1525,21 @@ def interpolate_prompts(model, start_prompt, end_prompt, steps=10, z_seed=42):
     Morphs between two text descriptions using the VAE Decoder.
     """
     # A. Encode both prompts
+    # Use the robust function we fixed in Cell 1.4
     emb_start = clap_encode_text([start_prompt])[0]
     emb_end = clap_encode_text([end_prompt])[0]
 
     # B. Fixed Z
     np.random.seed(z_seed)
-    z_fixed = np.random.normal(size=(1, int(model.vae_encoder.output_shape[0][1]))).astype('float32')
+
+    # --- FIX IS HERE ---
+    # We must match the Decoder's input size (Total Latent Dim: 256)
+    # The decoder input_shape is a list: [(None, 256), (None, 512)]
+    # We grab the dimension from the first input.
+    total_latent_dim = model.vae_decoder.input_shape[0][1]
+
+    z_fixed = np.random.normal(size=(1, total_latent_dim)).astype('float32')
+    # -------------------
 
     # C. Linear Interpolation
     interpolated_params = []

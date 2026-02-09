@@ -1,5 +1,5 @@
 """
-Modal deployment for VAE V2.7 Oscillator Model
+Modal deployment for VAE V2.7 Oscillator Separated Model
 Features: Parallel Batching + Wavetable/Noise Matching + Fast Cold Starts
 """
 
@@ -13,8 +13,8 @@ import numpy as np
 # Configuration
 # ============================================================================
 
-APP_NAME = "vae-v2p7-osc-inference"
-MODEL_PATH = "/root/ldm_final_tuned.keras"  # Baked weights path
+APP_NAME = "vae-v2p7-osc-separated-inference"
+MODEL_PATH = "/root/weights/ldm_final_tuned.keras"  # Baked weights path
 WT_LIB_DIR = "/root/wavetables"
 GPU_TYPE = "L4"
 
@@ -65,7 +65,7 @@ image = (
     # BAKE WAVETABLE DATA
     .add_local_dir(local_path=local_wavetables_dir, remote_path=WT_LIB_DIR)
     # ADD CODE
-    .add_local_file(local_path=local_model_dir / "vae_v2p7_osc.py", remote_path="/root/vae_v2p7_osc.py")
+    .add_local_file(local_path=local_model_dir / "vae_v2p7_osc_separated.py", remote_path="/root/vae_v2p7_osc_separated.py")
     .add_local_file(local_path=local_model_dir / "serum_params.py", remote_path="/root/serum_params.py")
 )
 
@@ -80,7 +80,7 @@ image = (
     scaledown_window=2,
     enable_memory_snapshot=True,
 )
-class VAEv2p7OscInference:
+class VAEv2p7OscSeparatedInference:
     
     @modal.enter(snap=True)
     def load_model(self):
@@ -104,10 +104,10 @@ class VAEv2p7OscInference:
         # 2. Setup Imports & Utils
         sys.path.insert(0, "/root")
         from serum_params import SERUM_PARAMETERS
+        
         # Import the model classes directly so Keras can reconstruct the graph
-        from vae_v2p7_osc import (
-            LatentDiffusionModel, VAE_Text_to_Synth_Audio, 
-            StopGradient, FiLMLayer, FiLM_Modulate, SinusoidalTimeEmbedding, ResidualBlock,
+        from vae_v2p7_osc_separated import (
+            VAE_V2P7_OSC_SEPARATED,
             ParameterUtils, numpy_to_json
         )
         
@@ -116,25 +116,13 @@ class VAEv2p7OscInference:
         self.ParameterUtils = ParameterUtils
         self.param_info = ParameterUtils.get_indices_and_classes(SERUM_PARAMETERS)
         
-        # 3. Load Keras Model
-        print(f"💾 Loading model from: {MODEL_PATH}")
-        
-        # Pass the Custom Layer 'StopGradient' here to fix the lambda error
-        custom_objects = {
-            "LatentDiffusionModel": LatentDiffusionModel,
-            "VAE_Text_to_Synth_Audio": VAE_Text_to_Synth_Audio,
-            "StopGradient": StopGradient,
-            "FiLMLayer": FiLMLayer,
-            "FiLM_Modulate": FiLM_Modulate,
-            "SinusoidalTimeEmbedding": SinusoidalTimeEmbedding,
-            "ResidualBlock": ResidualBlock
-        }
-        
-        with tf.device("/cpu:0"):
-            # Load the model directly using Keras
-            self.model = tf.keras.models.load_model(MODEL_PATH, custom_objects=custom_objects)
+        # 3. Load Keras Model via Wrapper
+        print(f"💾 Loading model wrapper from: {MODEL_PATH}")
+        self.model = VAE_V2P7_OSC_SEPARATED(MODEL_PATH)
+        self.model.load()
             
         # 4. Load Wavetable Libraries
+        # Using self.model here? No, using numpy loads directly
         print("📚 Loading Wavetable & Noise Libraries...")
         try:
             self.wt_names = np.load(os.path.join(WT_LIB_DIR, 'default_wavetable_names.npy'), allow_pickle=True)
@@ -190,7 +178,6 @@ class VAEv2p7OscInference:
             import tensorflow as tf
             
             # 1. Handle Seeding
-            # Since the notebook code relies on tf.random operations, setting the global seed works
             if seed is not None:
                 tf.random.set_seed(seed)
                 np.random.seed(seed)
@@ -219,15 +206,19 @@ class VAEv2p7OscInference:
                 sample_heads = [h[i] for h in numpy_heads]
                 
                 # Reconstruct Parameters & Get Audio Vectors
-                rec_params, audio_vecs = self.ParameterUtils.reconstruct_parameters_from_heads(
-                    sample_heads, 
-                    self.param_info
-                )
+                # Need to flatten SERUM_PARAMETERS map first for compatibility
+                flat_params = {int(p['id']): p for group in self.SERUM_PARAMETERS.values() for p in group}
                 
+                rec_params, audio_vecs = self.ParameterUtils.reconstruct_parameters_from_heads(
+                    sample_heads,
+                    flat_params, 
+                    self.param_info[3] # categorical_num_classes
+                )
+
                 # Match Wavetables
-                match_a = self.find_nearest_matches(audio_vecs["osc_a"], self.wt_embeds, self.wt_names)
-                match_b = self.find_nearest_matches(audio_vecs["osc_b"], self.wt_embeds, self.wt_names)
-                match_n = self.find_nearest_matches(audio_vecs["noise"], self.noise_embeds, self.noise_names)
+                match_a = self.find_nearest_matches(audio_vecs.get("osc_a"), self.wt_embeds, self.wt_names)
+                match_b = self.find_nearest_matches(audio_vecs.get("osc_b"), self.wt_embeds, self.wt_names)
+                match_n = self.find_nearest_matches(audio_vecs.get("noise"), self.noise_embeds, self.noise_names)
                 
                 # 1. Automatable Parameters (Flat Array)
                 all_auto_params.append(rec_params.tolist())
@@ -271,7 +262,7 @@ def generate_web(request: dict):
     if not description:
         raise HTTPException(status_code=400, detail="description is required")
     
-    inference = VAEv2p7OscInference()
+    inference = VAEv2p7OscSeparatedInference()
     return inference.generate.remote(
         description=description,
         diffusion_steps=request.get("diffusion_steps", 50),
@@ -287,9 +278,9 @@ def generate_web(request: dict):
 @app.local_entrypoint()
 def test():
     """Test the deployed model"""
-    print("🧪 Testing VAE V2.7 Oscillator Inference...")
+    print("🧪 Testing VAE V2.7 Oscillator Separated Inference...")
     
-    inference = VAEv2p7OscInference()
+    inference = VAEv2p7OscSeparatedInference()
     
     import time
     start = time.time()

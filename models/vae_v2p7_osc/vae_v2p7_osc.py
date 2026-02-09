@@ -1,4 +1,3 @@
-
 import os
 import tensorflow as tf
 import numpy as np
@@ -52,13 +51,10 @@ class ParameterUtils:
         """
         # Create a flat map of ID -> Parameter Def
         param_map = {int(p['id']): p for g in serum_parameters.values() for p in g}
-        
-        # Filter out the "Ignored" IDs (4, 24, 44) - Wavetable/Noise IDs usually handled separately
-        # valid_param_types = {k:v for k,v in param_map.items() if int(k) not in [4, 24, 44]}
         valid_param_types = param_map
         
         continuous_params = [int(i) for i, p in valid_param_types.items() if p["type"] == "continuous"]
-        # Mod Matrix is now roughly indices 170 to 201 (since we removed 3 items before it)
+        # Mod Matrix is roughly indices 170 to 201
         mod_matrix_ids = set(range(170, 202))
 
         unipolar_indices = sorted([i for i in continuous_params if i not in mod_matrix_ids])
@@ -73,7 +69,6 @@ class ParameterUtils:
             if "num_categories" in param_map[idx]:
                  categorical_num_classes[idx] = param_map[idx]["num_categories"]
             else:
-                 # Fallback default if not specified (though it should be)
                  categorical_num_classes[idx] = 10 
                  
         return {
@@ -83,19 +78,15 @@ class ParameterUtils:
             "bool_indices": boolean_params,
             "cat_indices": categorical_params,
             "categorical_num_classes": categorical_num_classes,
-            "n_params": len(param_map) # The total 'virtual' size including ignored ones
+            "n_params": len(param_map)
         }
 
     @staticmethod
     def reconstruct_parameters_from_heads(predicted_outputs, param_info, sample_categorical=True):
         """
         Reconstructs parameter vector from split heads AND retrieves audio embeddings.
-        
-        param_info: Result from get_indices_and_classes() containing indices and maps.
         """
-        n_params = 202 # Fixed max size for Serum params usually
-        # Or use param_info['n_params'] if we trust it covers the max ID. 
-        # Safest to use strict 202 or max(param_map.keys()) + 1
+        # Determine strict max param size
         max_id = max(param_info['unipolar_indices'] + param_info['bipolar_indices'] + param_info['bool_indices'] + param_info['cat_indices'] + [201])
         n_params = max_id + 1
         
@@ -167,7 +158,6 @@ class ParameterUtils:
             head_idx += 1
 
         # --- 2. RETRIEVE AUDIO EMBEDDINGS ---
-        # The last 3 heads are always Osc A, Osc B, Osc N
         def extract_embed(h):
             return np.array(h, dtype=np.float32).reshape(512)
 
@@ -225,7 +215,6 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         self.latent_dropout_rate = float(latent_dropout_rate)
 
     def call(self, inputs, training=False):
-        # inputs expected: [text, params, audio]
         text_embeddings, params_in, audio_in = inputs
         z_mean, z_log_var = self.encoder([text_embeddings, params_in, audio_in])
         eps = tf.random.normal(shape=tf.shape(z_mean))
@@ -255,6 +244,18 @@ class VAE_Text_to_Synth_Audio(tf.keras.Model):
         decoder = deserialize_keras_object(config.pop("decoder"))
         return cls(encoder, decoder, **config)
 
+# --- REPLACEMENT FOR LAMBDA / MONKEYPATCHING ---
+@register_keras_serializable(package="custom", name="StopGradient")
+class StopGradient(Layer):
+    """
+    A permanent Keras layer to stop gradient flow.
+    Replaces the Lambda(lambda x: tf.stop_gradient(x)) to fix serialization issues.
+    """
+    def call(self, inputs):
+        return tf.stop_gradient(inputs)
+
+    def get_config(self):
+        return super().get_config()
 
 # ==============================================================================
 # 3. DIFFUSION COMPONENTS (Stage 2: Denoising)
@@ -330,27 +331,24 @@ class DiffusionScheduler:
 
 @register_keras_serializable(package="custom", name="LatentDiffusionModel")
 class LatentDiffusionModel(tf.keras.Model):
-    def __init__(self, vae_encoder, vae_decoder, denoiser, timesteps=1000, embedding_model=None, **kwargs):
+    def __init__(self, vae_encoder, vae_decoder, denoiser, timesteps=1000, **kwargs):
         super().__init__(**kwargs)
         self.vae_encoder = vae_encoder
         self.vae_decoder = vae_decoder
         self.denoiser = denoiser
         self.timesteps = int(timesteps)
         self.scheduler = DiffusionScheduler(timesteps=self.timesteps)
-        self.embedding_model = embedding_model
 
     def call(self, inputs, training=False):
         return self.denoiser(inputs, training=training)
 
     @tf.function
     def _diffusion_loop_compiled(self, z, text_embeds, timestep_indices):
-        """Graph-optimized diffusion loop (No XLA to prevent potential hanging on large unrolls)"""
-        # Iterate over the tensor of timestep indices
+        """Graph-optimized diffusion loop"""
         for i in timestep_indices:
             batch_size = tf.shape(text_embeds)[0]
             t = tf.ones((batch_size,), dtype=tf.int32) * i
             
-            # Predict noise
             pred_noise = self.denoiser([z, t, text_embeds], training=False)
             
             alpha = tf.gather(self.scheduler.alphas, i)
@@ -360,7 +358,6 @@ class LatentDiffusionModel(tf.keras.Model):
             sqrt_one_minus_alpha_cumprod = tf.sqrt(1.0 - alpha_cumprod)
             model_mean = (1 / tf.sqrt(alpha)) * (z - ((1 - alpha) / (sqrt_one_minus_alpha_cumprod)) * pred_noise)
             
-            # Use tf.cond for conditional logic inside graph
             def add_noise():
                 noise = tf.random.normal(shape=tf.shape(z))
                 sigma = tf.sqrt(beta)
@@ -373,50 +370,33 @@ class LatentDiffusionModel(tf.keras.Model):
             
         return z
 
-    def generate(self, text_description, diffusion_steps=50, seed=None, verbose=False):
-        # 1. Encode Text
-        if verbose: print("Encoding text...")
-        if isinstance(text_description, str):
-            text_description = [text_description]
-            
-        if self.embedding_model:
-            # Check if embedding model is CLAP
-            if hasattr(self.embedding_model, "clap_encode_text"):
-                 text_embeds = self.embedding_model.clap_encode_text(text_description)
-            else:
-                # Assuming sentence-transformers
-                 text_embeds = self.embedding_model.encode(text_description)
-        else:
-            raise ValueError("No embedding model loaded. Call _load_embedding_model() first.")
-            
+    def generate(self, text_embeds, steps=50, seed=None):
+        """
+        Main generation method.
+        Input: text_embeds (Batch, 512) - ALREADY ENCODED TENSOR/ARRAY
+        Output: List of Decoded Heads
+        """
+        # Ensure tensor format
         text_embeds = tf.convert_to_tensor(text_embeds, dtype=tf.float32)
         batch_size = tf.shape(text_embeds)[0]
-        latent_dim = self.vae_encoder.output_shape[0][1] # Infer from encoder output
+        latent_dim = self.vae_encoder.output_shape[0][1]
         
         if seed is not None:
              tf.random.set_seed(seed)
 
         z = tf.random.normal(shape=(batch_size, latent_dim))
         
-        if verbose: print(f"Sampling with {diffusion_steps} steps (JIT Compile)...")
-        
-        # Determine timestep indices
-        # We need to construct a Tensor of indices to iterate over in the graph
-        if diffusion_steps is None or diffusion_steps >= self.timesteps:
-            # Full inverse range: [999, 998, ... 0]
+        # Calculate strided timesteps for faster generation
+        if steps is None or steps >= self.timesteps:
             timestep_indices = tf.range(self.timesteps - 1, -1, -1, dtype=tf.int32)
         else:
-            # Strided range
-            step_ratio = self.timesteps // diffusion_steps
-            # Python list construction for strided range, then convert to tensor
-            # range(0, 1000, 20) -> [0, 20, 40...] -> reverse -> [980, ..., 0]
-            # TF range supports negative delta directly
+            step_ratio = self.timesteps // steps
             timestep_indices = tf.range(self.timesteps - 1, -1, -step_ratio, dtype=tf.int32)
 
-        # Run compiled loop
+        # Run optimized loop
         z = self._diffusion_loop_compiled(z, text_embeds, timestep_indices)
 
-        if verbose: print("Decoding...")
+        # Decode
         decoded = self.vae_decoder([z, text_embeds], training=False)
         return decoded
 
@@ -436,66 +416,3 @@ class LatentDiffusionModel(tf.keras.Model):
         vae_decoder = deserialize_keras_object(config.pop("vae_decoder"))
         denoiser = deserialize_keras_object(config.pop("denoiser"))
         return cls(vae_encoder, vae_decoder, denoiser, **config)
-    
-    def _load_model(self, model_path=None):
-         # This method is not needed if we load weights externally, 
-         # but useful for the Class wrapper pattern
-         pass
-         
-    def _load_embedding_model(self):
-        import torch
-        from transformers import ClapModel, ClapProcessor
-        
-        class CLAPWrapper:
-            def __init__(self):
-                self.device = "cuda" if torch.cuda.is_available() else "cpu"
-                model_name = "laion/clap-htsat-fused"
-                self.model = ClapModel.from_pretrained(model_name).to(self.device)
-                self.processor = ClapProcessor.from_pretrained(model_name)
-                self.model.eval()
-
-            @torch.no_grad()
-            def clap_encode_text(self, texts, batch_size=128, normalize=True):
-                out = []
-                for i in range(0, len(texts), batch_size):
-                    batch = [str(t) for t in texts[i:i+batch_size]]
-                    inputs = self.processor(text=batch, return_tensors="pt", padding=True, truncation=True).to(self.device)
-                    feats = self.model.get_text_features(**inputs)
-                    if normalize:
-                        feats = torch.nn.functional.normalize(feats, dim=-1)
-                    out.append(feats.cpu())
-                return torch.cat(out, dim=0).numpy()
-
-        self.embedding_model = CLAPWrapper()
-
-
-# Wrapper Class for Easy Loading
-class VAE_V2P7_OSC:
-    def __init__(self, model_path, timesteps=1000):
-        self.model_path = model_path
-        self.timesteps = timesteps
-        self.model = None
-    
-    def load(self):
-        print(f"Loading VAE V2.7 Oscillator Model from {self.model_path}")
-        # Load the full model
-        # Note: We need to register custom objects
-        with tf.keras.utils.custom_object_scope({
-            'FiLMLayer': FiLMLayer,
-            'VAE_Text_to_Synth_Audio': VAE_Text_to_Synth_Audio,
-            'SinusoidalTimeEmbedding': SinusoidalTimeEmbedding,
-            'FiLM_Modulate': FiLM_Modulate,
-            'ResidualBlock': ResidualBlock,
-            'LatentDiffusionModel': LatentDiffusionModel
-        }):
-            self.model = tf.keras.models.load_model(self.model_path)
-            
-        # Load embedding model
-        self.model._load_embedding_model()
-        print("Model loaded successfully.")
-        
-    def generate(self, prompts, steps=1000, seed=None):
-        if self.model is None:
-            raise ValueError("Model not loaded. Call load() first.")
-        
-        return self.model.generate(prompts, diffusion_steps=steps, seed=seed)
