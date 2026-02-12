@@ -12,7 +12,7 @@ import os
 # Configuration
 # ============================================================================
 
-APP_NAME = "vae-v2p7-latent-diffusion-retrain-best"
+APP_NAME = "vae-v2p7-latent-diffusion-retrain-v3"
 VOLUME_NAME = "vae-v2p7-models"
 MODEL_PATH = "/root/ldm_final.keras"  # Use baked weights from image, not volume
 GPU_TYPE = "L4"  # NVIDIA L4 - faster than T4, more VRAM for batching 
