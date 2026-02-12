@@ -12,10 +12,10 @@ import os
 # Configuration
 # ============================================================================
 
-APP_NAME = "vae-v2p7-latent-diffusion-retrain-v3"
+APP_NAME = "vae-v2p7-latent-diffusion-retrain-v4"
 VOLUME_NAME = "vae-v2p7-models"
 MODEL_PATH = "/root/ldm_final.keras"  # Use baked weights from image, not volume
-GPU_TYPE = "L4"  # NVIDIA L4 - faster than T4, more VRAM for batching 
+GPU_TYPE = "A100"  # NVIDIA A100-40GB - 3-4x faster than L4, ideal for deep denoiser + CFG 
 
 # ============================================================================
 # Modal Setup
@@ -123,7 +123,7 @@ class VAEv2p7Inference:
         print("✅ Snapshot Ready. GPU will initialize on first request.")
     
     @modal.method()
-    def generate(self, description: str, diffusion_steps: int = 50, num_outputs: int = 1, seed: int = None, verbose: bool = False):
+    def generate(self, description: str, diffusion_steps: int = 50, num_outputs: int = 1, seed: int = None, guidance_scale: float = 7.5, verbose: bool = False):
         """
         Generate synthesizer parameters from text description.
         
@@ -147,6 +147,7 @@ class VAEv2p7Inference:
                         text_description=description,
                         diffusion_steps=diffusion_steps,
                         seed=seed + i,  # Deterministic increment from base seed
+                        guidance_scale=guidance_scale,
                         verbose=verbose,
                     )
                     if params is not None:
@@ -176,6 +177,7 @@ class VAEv2p7Inference:
                     text_description=description,
                     diffusion_steps=diffusion_steps,
                     seed=seed,
+                    guidance_scale=guidance_scale,
                     verbose=verbose,
                 )
                 
@@ -222,6 +224,7 @@ def generate_web(request: dict):
         diffusion_steps=request.get("diffusion_steps", 50),
         num_outputs=request.get("num_outputs", 1),
         seed=request.get("seed"),
+        guidance_scale=request.get("guidance_scale", 7.5),
     )
 
 # ============================================================================

@@ -1,0 +1,23 @@
+                                                 Apps                                         
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━
+┃ App ID                    ┃ Description     ┃ State    ┃ Tasks ┃ Created at       ┃ Stopped 
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━
+│ ap-h7bigbxzEfckLUU08Up0ze │ vae-v2p7-infer… │ deployed │ 0     │ 2026-01-31 12:57 │         
+│                           │                 │          │       │ CET              │         
+│ ap-J8JyVJoQb3p8nOb0NXOBoK │ vae-v2p7-infer… │ deployed │ 0     │ 2026-01-31 14:56 │         
+│                           │                 │          │       │ CET              │         
+│ ap-h7NyjEmbLcMiZuUT3gYReh │ vae_v2p7_retra… │ deployed │ 0     │ 2026-02-08 20:25 │         
+│                           │                 │          │       │ CET              │         
+│ ap-Gzx0JmYD0qxPQAA88NEzIF │ vae_v2p7_flow   │ deployed │ 0     │ 2026-02-09 18:44 │         
+│                           │                 │          │       │ CET              │         
+│ ap-rhfviiu7HwI0M6PYu8UHXO │ vae-v2p7-laten… │ deployed │ 0     │ 2026-02-11 18:30 │         
+│                           │                 │          │       │ CET              │         
+│ ap-3nfS1VLBxnNcRZEnEJKYBy │ vae-v2p7-laten… │ deployed │ 0     │ 2026-02-11 18:46 │         
+│                           │                 │          │       │ CET              │         
+│ ap-6aVyZSuroouC69zs0aCpcb │ vae-v2p7-laten… │ deployed │ 0     │ 2026-02-11 18:59 │         
+│                           │                 │          │       │ CET              │         
+│ ap-WJ5ufXAW7xuDRDfjPEt3ZF │ vae-v2p7-laten… │ deployed │ 0     │ 2026-02-12 10:47 │         
+│                           │                 │          │       │ CET              │         
+│ ap-7zCUZX6Ahx1D0wNJEB8Rua │ vae-v2p7-laten… │ stopped  │ 0     │ 2026-02-12 16:48 │ 2026-02-
+│                           │                 │          │       │ CET              │ 16:50 CE
+└───────────────────────────┴─────────────────┴──────────┴───────┴──────────────────┴─────────

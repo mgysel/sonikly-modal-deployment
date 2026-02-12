@@ -1,0 +1,30 @@
+"""
+VAE V2.7: Latent Diffusion Model for VAE-based synthesizer parameter generation.
+
+This module contains all VAE V2.7-specific components:
+- Custom Keras layers (SliceLayer, FiLMLayer, SinusoidalTimeEmbedding, FiLM_Modulate, ResidualBlock)
+- VAE model class with Standard Gaussian Prior
+- Diffusion Scheduler (DDPM)
+- Latent Diffusion Model with 1000-step denoising
+- Parameter reconstruction logic
+- Main VAE_V2P7 wrapper class
+
+Key Innovation: Two-stage architecture where VAE compresses parameters to latent space,
+then a diffusion model generates latents conditioned on text, enabling more flexible
+generation through iterative denoising.
+"""
+
+import os
+import numpy as np
+import tensorflow as tf
+import keras
+from keras import layers
+from keras.layers import Layer, Dense, LayerNormalization, Dropout, Add, Concatenate, LeakyReLU, Activation
+
+try:
+    from keras.saving import register_keras_serializable, serialize_keras_object, deserialize_keras_object
+except (ImportError, AttributeError):
+    from tensorflow.keras.utils import register_keras_serializable
+    from tensorflow.keras.saving import serialize_keras_object, deserialize_keras_object
+
+from ..vae_v2p5_learned_prior.encoders import encode_text, load_clap_model, get_sentence_transformer_model
