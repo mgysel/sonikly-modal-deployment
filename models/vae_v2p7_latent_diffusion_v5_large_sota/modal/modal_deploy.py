@@ -12,7 +12,7 @@ import os
 # Configuration
 # ============================================================================
 
-APP_NAME = "vae-v2p7-latent-diffusion-retrain-v5"
+APP_NAME = "vae-v2p7-v5-large-sota"
 VOLUME_NAME = "vae-v2p7-models"
 MODEL_PATH = "/root/ldm_final.keras"  # Use baked weights from image, not volume
 GPU_TYPE = "A100"  # NVIDIA A100-40GB - 3-4x faster than L4, ideal for deep denoiser + CFG 

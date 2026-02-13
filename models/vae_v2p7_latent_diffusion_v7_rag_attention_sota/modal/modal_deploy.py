@@ -1,6 +1,6 @@
 """
 Modal deployment for VAE V2.7 Latent Diffusion Model
-Features: Parallel Batching (5 outputs default) + Fast Cold Starts
+Features: Parallel Batching (5 outputs default) + Fast Cold Starts + V7 RAG Attention SOTA
 """
 
 import modal
@@ -12,14 +12,17 @@ import os
 # Configuration
 # ============================================================================
 
-APP_NAME = "vae_v2p7_retrained"
+APP_NAME = "vae-v2p7-v7-rag-attn-sota"
+VOLUME_NAME = "vae-v2p7-models-v7"
 MODEL_PATH = "/root/ldm_final.keras"  # Baked weights path
-GPU_TYPE = "L4"
+GPU_TYPE = "A100"
 
 app = modal.App(APP_NAME)
 
 # Path to local weights file (must exist on your machine)
 local_weights_path = Path(__file__).parent.parent / "weights" / "ldm_final.keras"
+local_rag_embeddings_path = Path(__file__).parent.parent / "weights" / "rag_db_embeddings.npy"
+local_rag_params_path = Path(__file__).parent.parent / "weights" / "rag_db_params.npy"
 
 # ============================================================================
 # Image Definition
@@ -59,6 +62,9 @@ image = (
     .add_local_file(local_path=local_weights_path, remote_path="/root/ldm_final.keras")
     .add_local_file(local_path=Path(__file__).parent.parent / "vae_v2p7.py", remote_path="/root/vae_v2p7.py")
     .add_local_file(local_path=Path(__file__).parent.parent / "encoders.py", remote_path="/root/encoders.py")
+    # BAKE RAG DATABASE
+    .add_local_file(local_path=local_rag_embeddings_path, remote_path="/root/rag_db_embeddings.npy")
+    .add_local_file(local_path=local_rag_params_path, remote_path="/root/rag_db_params.npy")
 )
 
 # ============================================================================
@@ -72,7 +78,7 @@ image = (
     scaledown_window=2,
     enable_memory_snapshot=True,
 )
-class VAEv2p7RetrainedInference:
+class VAEv2p7Inference:
     
     @modal.enter(snap=True)
     def load_model(self):
@@ -82,9 +88,14 @@ class VAEv2p7RetrainedInference:
         """
         import os
         import tensorflow as tf
+        import keras
         
         # Double-tap XLA disable
         tf.config.optimizer.set_jit(False)
+        
+        # Enable Mixed Precision for A100 Speedup
+        print("🚀 Enabling Mixed Precision (Float16)...")
+        keras.mixed_precision.set_global_policy("mixed_float16")
         
         # Add model directory to Python path
         sys.path.insert(0, "/root")
@@ -100,19 +111,27 @@ class VAEv2p7RetrainedInference:
             self.model._load_model()
             self.model._load_embedding_model()
             
+            # Load RAG data if available
+            self.model.load_rag_data(
+                embeddings_path="/root/rag_db_embeddings.npy",
+                params_path="/root/rag_db_params.npy"
+            )
+            
             # NO WARMUP - Avoids XLA compilation trap.
             # We accept the "unbuilt state" warnings in exchange for 40s faster boot.
         
-        print("✅ Snapshot Ready.")
+        print("✅ Snapshot Ready with RAG database.")
     
     @modal.method()
-    def generate(self, description: str, diffusion_steps: int = 50, num_outputs: int = 5, seed: int = None, verbose: bool = False):
+    def generate(self, description: str, diffusion_steps: int = 50, num_outputs: int = 5, seed: int = None, 
+                 guidance_scale: float = 7.5, use_rag: bool = False, rag_strength: float = 0.8, 
+                 rag_top_k: int = 10, verbose: bool = False):
         """
-        Generate synthesizer parameters with TRUE parallel batching.
+        Generate synthesizer parameters with TRUE parallel batching and RAG support.
         
         PARALLEL EXECUTION:
         Now defaults to num_outputs=5. It sends a batch of 5 prompts to the GPU
-        simultaneously. The L4 GPU will calculate all 5 in roughly the same time as 1.
+        simultaneously. The A100 GPU will calculate all 5 in roughly the same time as 1.
         
         Performance:
             - Cold start: ~5-8s (snapshot restore)
@@ -138,6 +157,10 @@ class VAEv2p7RetrainedInference:
                 text_description=prompts,  # Pass the LIST, not the string
                 diffusion_steps=diffusion_steps,
                 seed=seed,
+                guidance_scale=guidance_scale,
+                use_rag=use_rag,
+                rag_strength=rag_strength,
+                rag_top_k=rag_top_k,
                 verbose=verbose,
             )
             
@@ -188,12 +211,16 @@ def generate_web(request: dict):
     if not description:
         raise HTTPException(status_code=400, detail="description is required")
     
-    inference = VAEv2p7RetrainedInference()
+    inference = VAEv2p7Inference()
     return inference.generate.remote(
         description=description,
         diffusion_steps=request.get("diffusion_steps", 50),
         num_outputs=request.get("num_outputs", 5),  # Default to 5 parallel outputs
         seed=request.get("seed"),
+        guidance_scale=request.get("guidance_scale", 7.5),
+        use_rag=request.get("use_rag", False),
+        rag_strength=request.get("rag_strength", 0.8),
+        rag_top_k=request.get("rag_top_k", 10),
         verbose=request.get("verbose", False),
     )
 
@@ -203,10 +230,10 @@ def generate_web(request: dict):
 
 @app.local_entrypoint()
 def test():
-    """Test the deployed model (run with: modal run modal_deploy_parallel.py)"""
+    """Test the deployed model (run with: modal run modal_deploy.py)"""
     print("🧪 Testing parallel batching...")
     
-    inference = VAEv2p7RetrainedInference()
+    inference = VAEv2p7Inference()
     
     # Test with 5 parallel outputs
     import time
